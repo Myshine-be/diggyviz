@@ -85,7 +85,9 @@ vec3 calcNormal(vec3 p) {
 void main() {
   vec2 p = P();
   R = 0.46 + uKick * 0.03 + uDrop * 0.05;
-  vec3 ro = vec3(0.0, 0.0, 4.5);
+  // Max extent is R(0.54) + L(0.86) = 1.40; with a 0.37 half-FOV tangent that fits the
+  // portrait width from distance >= 4.03. 4.05 keeps the orb as large as possible.
+  vec3 ro = vec3(0.0, 0.0, 4.05);
   vec3 rd = normalize(vec3(p, -1.35));
   mat3 o = orient();
   ro = o * ro; rd = o * rd;
