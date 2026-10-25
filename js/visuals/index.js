@@ -8,4 +8,7 @@ import chrome from "./chrome.js";
 import moire from "./moire.js";
 import warp from "./warp.js";
 
-export const VISUALS = [urchin, glass, soulbeat, chrome, moire, warp, tunnel, spectrum];
+import nightdrive from "./night-drive.js";
+import pacman from "./pacman.js";
+
+export const VISUALS = [nightdrive, pacman, urchin, glass, soulbeat, chrome, moire, warp, tunnel, spectrum];

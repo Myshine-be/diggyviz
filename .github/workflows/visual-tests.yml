@@ -17,8 +17,8 @@ jobs:
         run: |
           while IFS= read -r file; do node --check "$file"; done < <(find js -name '*.js')
       - name: Regression tests
-        run: node --test tests/regression.test.mjs
-      - name: Eight visuals and renderer lifecycle
+        run: node --test tests/*.test.mjs
+      - name: Ten visuals, story rewards and renderer lifecycle
         run: node tests/browser.mjs
       - uses: actions/upload-artifact@v4
         if: always()

@@ -36,7 +36,7 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
    };
    ```
 2. Import it in `js/visuals/index.js` and add it to `VISUALS`.
-3. The shader gets everything in `js/glsl.js` HEADER: `uTime, uSongTime, uBeat, uKick, uSnare, uHat,
+3. The shader gets everything in `js/glsl.js` HEADER: `uSceneTime, uSceneBeat, uTime, uSongTime, uBeat, uKick, uSnare, uHat,
    uEnergy, uLevel, uDrop, uTravel, uSeed, uBands[32], uPeaks[32], uPal[4], uPrev, uArt` and helpers
    `P(), rot(), smin(), hash*, noise2/3, fbm2, band(x), peak(x), pal(t), wave(x), gridLine(x,w)`.
    Do not redeclare these.
@@ -69,3 +69,7 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
 3. `window.diggy.setVisual("id")` switches visuals from the console; `window.diggy.onTrack({...})`
    fakes a track change.
 4. Work on a branch, open a pull request; Mo merges to `main` (that is what GitHub Pages serves).
+
+## Story visuals
+
+`story: true, duration: 120` prevents a track change from interrupting the scene and gives its 90-second reward time to finish. `uSceneTime` counts visible playback seconds with the sheets closed, and `uSceneBeat` integrates the current BPM continuously. Both reset when selecting a different visual; they survive song changes, seeks, resize and WebGL restoration. Use these uniforms instead of song position for character paths and timed surprises. Use `P()` for framing in both orientations.

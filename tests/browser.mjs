@@ -84,7 +84,7 @@ try {
   await waitFor('!!window.diggy?.engine && window.__frames.length > 0');
   await evaluate(`window.__time = performance.now(); document.querySelector('[data-pick="demo"]').click(); document.querySelector('#autoBtn').click(); window.__step(1/60);`);
   const ids = await evaluate('window.diggy.engine.visuals.map(v => v.id)');
-  assert.equal(ids.length, 8);
+  assert.equal(ids.length, 10);
   for (const id of ids) {
     const result = await evaluate(`(async()=>{
       const e=window.diggy.engine;
@@ -98,6 +98,35 @@ try {
     assert.ok(result.compiled && result.glError === 0 && result.litPixels > 100, JSON.stringify(result));
     results.push(result); await new Promise(r => setTimeout(r, 300)); await screenshot(id);
   }
+  // Story clocks must survive a real onTrack callback, pause, and the 45-second carousel boundary.
+  for (const id of ['nightdrive','pacman']) {
+    const result = await evaluate(`(async()=>{
+      const e=window.diggy.engine;e.setVisual('${id}',{instant:true});window.diggy.setVisual('${id}');
+      if(document.querySelector('#autoBtn').getAttribute('aria-pressed')!=='true')document.querySelector('#autoBtn').click();
+      e.cur.clock.seconds=89;e.cur.clock.beats=178;
+      await window.diggy.onTrack({id:'story-track-${id}',name:'Nachtrit',artists:'DiggyViz',art:'',dur:200000,prog:0,playing:true});
+      const kept=e.currentVisual.id==='${id}'&&e.cur.clock.seconds===89;
+      window.__step(.5);
+      const elapsed=e.cur.clock.seconds;
+      await window.diggy.onTrack({id:'story-track-${id}',name:'Nachtrit',artists:'DiggyViz',art:'',dur:200000,prog:0,playing:false});
+      window.__step(5);
+      const paused=e.cur.clock.seconds===elapsed;
+      document.querySelector('#autoBtn').click();
+      return {kept,paused,id:e.currentVisual.id};
+    })()`);
+    assert.ok(result.kept&&result.paused&&result.id===id,JSON.stringify(result));
+    results.push({test:id+' story lifecycle',...result});
+    for (const time of [35,89.9,96,106]) {
+      await evaluate(`(async()=>{
+        await window.diggy.onTrack({id:'frame-${id}',name:'Nachtrit',artists:'DiggyViz',art:'',dur:200000,prog:16000,playing:false});
+        const e=window.diggy.engine;e.cur.clock.seconds=${time};e.cur.clock.beats=${time}*2;
+        window.__step(1/60); document.querySelector('#app').classList.add('idle');
+      })()`);
+      assert.equal(await evaluate('window.diggy.engine.gl.getError()'),0);
+      await new Promise(r=>setTimeout(r,600));
+      await screenshot(id+'-'+String(time).replace('.','_'));
+    }
+  }
   const rapid = await evaluate(`(()=>{const e=window.diggy.engine;
     window.diggy.setVisual('glass'); window.__step(1/60); window.diggy.setVisual('soulbeat'); window.__step(1/60);
     return {snapshot:!!e.old?.frozen,glError:e.gl.getError()};})()`);
@@ -106,6 +135,13 @@ try {
   await evaluate('window.__step(1/60)');
   assert.equal(await evaluate('window.diggy.engine.gl.getError()'), 0);
   await screenshot('landscape'); results.push({test:'landscape resize',passed:true});
+  for(const id of ['nightdrive','pacman']) {
+    await evaluate(`window.diggy.engine.setVisual('${id}',{instant:true});window.diggy.setVisual('${id}');window.diggy.engine.cur.clock.seconds=96;window.diggy.engine.cur.clock.beats=192;window.__step(1/60);`);
+    assert.equal(await evaluate('window.diggy.engine.gl.getError()'),0);
+    await screenshot(id+'-landscape');
+  }
+  await evaluate(`window.diggy.engine.setVisual('soulbeat',{instant:true});window.__step(1/60);`);
+
   const restored = await evaluate(`new Promise(resolve=>{const e=window.diggy.engine,cv=e.canvas,ext=e.gl.getExtension('WEBGL_lose_context');
     if(!ext){resolve(false);return;}
     cv.addEventListener('webglcontextlost',()=>setTimeout(()=>{
@@ -116,7 +152,7 @@ try {
   await evaluate(`localStorage.setItem('rv.visual', JSON.stringify('removed-visual'));`);
   await send('Page.reload'); await waitFor('!!window.diggy?.engine && window.__frames.length > 0');
   await evaluate('window.__time = performance.now(); window.__step(1/60)');
-  assert.equal(await evaluate('window.diggy.engine.currentVisual.id'), 'urchin');
+  assert.equal(await evaluate('window.diggy.engine.currentVisual.id'), 'nightdrive');
   assert.equal(await evaluate(`document.querySelector('[data-pick="lastfm"]').disabled`), true);
   results.push({test:'saved visual fallback and unavailable Last.fm',passed:true});
   const exceptions = events.filter(e => e.method === 'Runtime.exceptionThrown');

@@ -6,6 +6,8 @@ precision highp float;
 precision highp int;
 
 uniform vec2  uRes;        // render size in pixels
+uniform float uSceneTime; // visible playback seconds since this visual was selected
+uniform float uSceneBeat; // continuous integrated tempo, unaffected by seek/track change
 uniform float uDelta;      // elapsed seconds, for feedback independent of refresh rate
 uniform float uTime;       // seconds, always running
 uniform float uSongTime;   // song position in seconds

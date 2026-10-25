@@ -3,6 +3,8 @@
 
 import { HEADER, VERT, MIX_FRAG, BRIGHT_FRAG, BLUR_FRAG, FINAL_FRAG } from "./glsl.js";
 
+import { SceneClock } from "./scene-clock.js";
+
 export class Engine {
   constructor(canvas, visuals, { onError, fadeDuration = 1.6 } = {}) {
     this.canvas = canvas;
@@ -24,10 +26,12 @@ export class Engine {
     });
     canvas.addEventListener("webglcontextrestored", () => {
       const id = this.cur?.vis.id || this.visuals[0].id;
+      const clock = this.cur?.clock;
       try {
         this.#initResources();
         if (this.art) this.setArt(this.art.img, this.art.pal);
         this.setVisual(id, { instant: true });
+        if (clock && this.cur) this.cur.clock = clock;
         this.onError("");
       } catch (e) { this.onError("Herstellen mislukt. Herlaad de pagina: " + e.message); }
     });
@@ -59,7 +63,7 @@ export class Engine {
     const vis = this.visuals.find((v) => v.id === id) || this.visuals[0];
     if (this.cur && this.cur.vis.id === vis.id) return vis;
     if (!this.#ensure(vis)) return this.cur?.vis;
-    const slot = { vis, t: [this.#target(this.RW, this.RH), this.#target(this.RW, this.RH)], i: 0 };
+    const slot = { vis, clock: new SceneClock(), t: [this.#target(this.RW, this.RH), this.#target(this.RW, this.RH)], i: 0 };
     let previous = this.cur;
     if (!instant && this.old && this.fade < 1) {
       // Rapid swipes continue from the actual composite on screen, not the
@@ -122,6 +126,8 @@ export class Engine {
     const gl = this.gl;
     if (!this.cur || gl.isContextLost()) return;
     this.#resize();
+    const sceneDt = f.sceneDt ?? f.dt;
+    for (const slot of [this.cur, this.old]) if (slot?.clock) slot.clock.advance(sceneDt, f.bpm);
     this.#adapt(f.dt, f.time);
     this.travel += f.dt * (0.35 + f.audio.energy * 0.9 + f.audio.kick * 0.9 + f.drop * 6.0);
     if (this.fade < 1) this.fade = Math.min(1, this.fade + f.dt / this.fadeDur);
@@ -166,6 +172,7 @@ export class Engine {
     const A = f.audio, pal = f.pal;
     const set1 = (n, v) => { if (L[n]) gl.uniform1f(L[n], v); };
     if (L.uRes) gl.uniform2f(L.uRes, dst.w, dst.h);
+    set1("uSceneTime", slot.clock.seconds); set1("uSceneBeat", slot.clock.beats);
     set1("uDelta", f.dt); set1("uTime", f.time); set1("uSongTime", f.songTime); set1("uBeat", A.beat);
     set1("uKick", A.kick); set1("uSnare", A.snare); set1("uHat", A.hat); set1("uEnergy", A.energy); set1("uLevel", A.level);
     set1("uDrop", f.drop); set1("uTravel", this.travel); set1("uSeed", f.seed);

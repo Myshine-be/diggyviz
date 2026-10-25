@@ -1,5 +1,6 @@
 // DiggyViz app: wires sources → track state → rhythm → engine, plus the UI.
 
+import { autoDuration, switchOnTrack } from "./scene-clock.js";
 import { CONFIG } from "./config.js";
 import { store } from "./store.js";
 import { audio, analyse, hashStr } from "./rhythm.js";
@@ -50,6 +51,7 @@ function setVisual(id) {
   if (!engine) return;
   const v = engine.setVisual(id);
   if (!v) return;
+  lastSwitch = performance.now();
   store.set("visual", v.id);
   chips.querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.id === v.id)));
   chips.querySelector(`[data-id="${v.id}"]`)?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
@@ -89,7 +91,7 @@ async function onTrack(t) {
   const isFirst = firstTrack;
   drop = isFirst ? 0 : 1;
   taps = [];
-  if (auto && !isFirst) stepVisual(1);
+  if (auto && !isFirst && switchOnTrack(engine?.currentVisual)) stepVisual(1);
   firstTrack = false;
 
   if (t.palette) { palTarget = clonePal(t.palette); engine?.setArt(null, t.palette); }
@@ -148,18 +150,21 @@ function refreshSpotifyState() {
 /* ---------------- render loop ---------------- */
 let last = performance.now(), t0 = last;
 function frame(now) {
-  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  const elapsed = Math.max(0, (now - last) / 1000);
+  const dt = Math.min(0.1, elapsed); last = now;
   const pos = position();
   analyse(pos, track.playing, hashStr(track.id || "x"), tempo.bpm, tempo.off, dt);
   drop = Math.max(0, drop - dt * 0.7);
   const k = 1 - Math.exp(-dt * 2.2);
   for (const key of ["dark", "mid", "hi", "hot"]) for (let i = 0; i < 3; i++) palCur[key][i] += (palTarget[key][i] - palCur[key][i]) * k;
 
-  if (auto && engine && now - lastSwitch > CONFIG.AUTO_SWITCH_SECONDS * 1000) stepVisual(1);
+  const visual = engine?.currentVisual;
+  const age = visual?.story ? (engine.cur?.clock.seconds ?? 0) : (now - lastSwitch) / 1000;
+  if (auto && engine && age >= autoDuration(visual, CONFIG.AUTO_SWITCH_SECONDS)) stepVisual(1);
 
   if (engine) {
     try {
-      engine.render({ time: (now - t0) / 1000, dt, songTime: pos / 1000, audio, pal: palCur, drop, seed: hashStr(track.id || "x") % 1000 });
+      engine.render({ sceneDt: document.visibilityState === "visible" && track.playing && !sheetOpen() ? elapsed : 0, bpm: tempo.bpm, time: (now - t0) / 1000, dt, songTime: pos / 1000, audio, pal: palCur, drop, seed: hashStr(track.id || "x") % 1000 });
     } catch (e) { console.error(e); }
   }
   $("bar").style.width = (track.dur ? (pos / track.dur) * 100 : 0) + "%";
@@ -225,7 +230,7 @@ document.addEventListener("keydown", (e) => {
 
 let wakeLock = null;
 async function keepAwake() { try { if (!wakeLock && document.visibilityState === "visible") { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => { wakeLock = null; }); } } catch {} }
-document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") keepAwake(); });
+document.addEventListener("visibilitychange", () => { last = performance.now(); if (document.visibilityState === "visible") keepAwake(); });
 
 /* settings + onboarding */
 $("settingsBtn").addEventListener("click", () => { refreshSpotifyState(); $("settings").hidden = false; });
