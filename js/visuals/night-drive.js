@@ -37,7 +37,12 @@ vec3 speaker(vec3 col,vec2 q,float aa) {
   return col;
 }
 void main() {
-  vec2 p=P();float px=1.2/min(uRes.x,uRes.y);
+  vec2 p=P();
+  // Portrait: zoom in and lower the scene so the car sits in the lower third, not mid-screen.
+  float tall=clamp(uRes.y/uRes.x-1.0,0.0,1.3);
+  float zoom=1.0-0.22*tall;
+  p=p*zoom+vec2(0.0,0.19*tall);
+  float px=1.2*zoom/min(uRes.x,uRes.y);
   float t=uSceneTime, egg=surprise(t), travel=t*.75;
   float horizon=.17;
   vec3 col=mix(uPal[0]*.15,uPal[1]*.12,exp(-abs(p.y-horizon)*4.0));
@@ -48,7 +53,7 @@ void main() {
   vec2 sunp=p-vec2(.12,.38);
   float sun=disk(sunp,.135,px);
   float stripe=smoothstep(.15,.24,fract(sunp.y*45.0));
-  col+=mix(uPal[3],uPal[2],smoothstep(-.13,.13,sunp.y))*sun*stripe*.8;
+  col+=mix(uPal[3],uPal[2],smoothstep(-.13,.13,sunp.y))*sun*stripe*.8*(1.0-egg*.8);
   col+=uPal[3]*exp(-length(sunp)*9.0)*.12;
   float ridge=horizon+.015+abs(sin(p.x*7.0+t*.008))*.075+abs(sin(p.x*19.0))*.023;
   col=mix(col,uPal[0]*.3,1.0-smoothstep(ridge-px,ridge+px,p.y));
@@ -68,7 +73,7 @@ void main() {
     vec3 ground=uPal[0]*.5;
     float grid=gridLine(p.x/depth*2.0,.012)+gridLine(z-travel,.018);
     ground+=uPal[1]*grid*.045;
-    ground+=uPal[3]*egg*exp(-depth*2.0)*.15;
+    ground+=uPal[3]*egg*exp(-depth*14.0)*.12;
     col=mix(ground,uPal[0]*.13,road);
     float edge=exp(-abs(abs(x)-halfW)*160.0);
     col+=mix(uPal[1],uPal[3],egg)*edge*(.45+.35*uKick);
@@ -76,7 +81,7 @@ void main() {
     col+=uPal[2]*lane*road*.7;
     // Reflections and occasional road rings during the secret sky route.
     col+=uPal[1]*exp(-abs(x)*8.0)*road*.07;
-    col+=uPal[3]*egg*gridLine(z*1.5-travel*1.5,.025)*road*.6;
+    col+=uPal[3]*egg*gridLine(z*1.5-travel*1.5,.025)*road*.6*smoothstep(1.2,3.0,z);
   }
   // Depth-sorted roadside props: palms, dancing speakers and curved streetlights.
   for(int i=11;i>=0;i--) {
@@ -106,11 +111,24 @@ void main() {
   vec2 portal=p-vec2(0,.33);
   float pr=length(portal/vec2(1,.72));
   col+=uPal[3]*egg*exp(-abs(pr-.22)*100.0)*(1.0+.25*sin(atan(portal.y,portal.x)*12.0-t*2.0));
-  vec2 uf=portal-vec2(sin((t-90.0)*.5)*.13,.03+sin(t)*.025);
-  col+=egg*uPal[2]*boxMask(uf,vec2(.075,.012),.012,px);
-  col+=egg*uPal[1]*disk(uf*vec2(1,1.6)-vec2(0,.02),.04,px);
+  vec2 ufoPos=vec2(sin((t-90.0)*.5)*.06,.36+sin(t)*.012);
+  vec2 uf=p-ufoPos;
+  float lift=egg*.10;vec2 carPos=vec2(sin(t*.28)*.025,-.29+lift+.004*uKick);
+  // Tractor beam: a widening cone from the saucer down to the car.
+  vec2 bv=p-ufoPos;float span=ufoPos.y-carPos.y;
+  float bt=clamp(-bv.y/span,0.0,1.0);
+  float bw=.03+bt*.12;
+  float beam=(1.0-smoothstep(bw-.012,bw,abs(bv.x-(carPos.x-ufoPos.x)*bt)))*step(bv.y,0.0)*step(-span,bv.y);
+  col+=uPal[2]*beam*egg*(.12+.08*sin(bv.y*90.0-t*8.0)+.1*uKick);
+  float saucer=boxMask(uf,vec2(.075,.012),.012,px);
+  float dome=disk((uf-vec2(0,.016))*vec2(1,1.5),.034,px)*step(.008,uf.y);
+  col=mix(col,uPal[0]*.25,egg*max(saucer,dome));
+  col+=egg*uPal[2]*boxLine(uf,vec2(.075,.012),.012,.0018,px)*1.3;
+  col+=egg*uPal[1]*(disk((uf-vec2(0,.016))*vec2(1,1.5),.034,px)-disk((uf-vec2(0,.016))*vec2(1,1.5),.028,px))*step(.008,uf.y);
+  for(int k=0;k<5;k++){float lx=(float(k)-2.0)*.03;float on=step(.5,fract(uSceneBeat*.5+float(k)*.2));
+    col+=egg*mix(uPal[1],uPal[3],on)*disk(uf-vec2(lx,-.002),.0045,px)*(.6+on);}
   // Car: rear silhouette, glass roof, spoiler, tyres, plate and full-width taillights.
-  float lift=egg*.10;vec2 car=p-vec2(sin(t*.28)*.025,-.29+lift+.004*uKick);
+  vec2 car=p-carPos;
   vec2 sh=(car-vec2(0,-.065))*vec2(1,3);
   float shadow=exp(-dot(sh,sh)*90.0);
   col*=1.0-shadow*.75;

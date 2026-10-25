@@ -9,6 +9,6 @@ import moire from "./moire.js";
 import warp from "./warp.js";
 
 import nightdrive from "./night-drive.js";
-import pacman from "./pacman.js";
+import bloop from "./bloop.js";
 
-export const VISUALS = [nightdrive, pacman, urchin, glass, soulbeat, chrome, moire, warp, tunnel, spectrum];
+export const VISUALS = [nightdrive, bloop, urchin, glass, soulbeat, chrome, moire, warp, tunnel, spectrum];

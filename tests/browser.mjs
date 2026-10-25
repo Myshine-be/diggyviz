@@ -99,7 +99,7 @@ try {
     results.push(result); await new Promise(r => setTimeout(r, 300)); await screenshot(id);
   }
   // Story clocks must survive a real onTrack callback, pause, and the 45-second carousel boundary.
-  for (const id of ['nightdrive','pacman']) {
+  for (const id of ['nightdrive','bloop']) {
     const result = await evaluate(`(async()=>{
       const e=window.diggy.engine;e.setVisual('${id}',{instant:true});window.diggy.setVisual('${id}');
       if(document.querySelector('#autoBtn').getAttribute('aria-pressed')!=='true')document.querySelector('#autoBtn').click();
@@ -135,7 +135,7 @@ try {
   await evaluate('window.__step(1/60)');
   assert.equal(await evaluate('window.diggy.engine.gl.getError()'), 0);
   await screenshot('landscape'); results.push({test:'landscape resize',passed:true});
-  for(const id of ['nightdrive','pacman']) {
+  for(const id of ['nightdrive','bloop']) {
     await evaluate(`window.diggy.engine.setVisual('${id}',{instant:true});window.diggy.setVisual('${id}');window.diggy.engine.cur.clock.seconds=96;window.diggy.engine.cur.clock.beats=192;window.__step(1/60);`);
     assert.equal(await evaluate('window.diggy.engine.gl.getError()'),0);
     await screenshot(id+'-landscape');

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SceneClock, autoDuration, switchOnTrack } from '../js/scene-clock.js';
 import nightdrive from '../js/visuals/night-drive.js';
-import pacman from '../js/visuals/pacman.js';
+import bloop from '../js/visuals/bloop.js';
 
 test('90 seconds is elapsed playback time, independently of display refresh',()=>{
   for (const hz of [30,60,120]) {
@@ -19,7 +19,7 @@ test('pause/hidden time does not advance story or beat; tempo changes are contin
   c.advance(45,90);assert.equal(c.seconds,90);assert.equal(c.beats,157.5);
 });
 test('story survives track changes and gets enough time for its 90-second reward',()=>{
-  for(const v of [nightdrive,pacman]) {
+  for(const v of [nightdrive,bloop]) {
     assert.equal(switchOnTrack(v),false);
     assert.equal(autoDuration(v,45),120);
     assert.ok(autoDuration(v,45)>105);
