@@ -1,0 +1,39 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "be.myshine.diggyviz.tv"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "be.myshine.diggyviz.tv"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    signingConfigs {
+        // Vaste sleutel zodat updates over een eerdere installatie heen gaan.
+        // Dit is een debug-sleutel (wachtwoord "android"), enkel voor zelf installeren, niet voor de Play Store.
+        sideload {
+            storeFile file("../diggyviz-tv.keystore")
+            storePassword "android"
+            keyAlias "diggyviz"
+            keyPassword "android"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.sideload
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
