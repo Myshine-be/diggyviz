@@ -25,11 +25,6 @@ Goed om te weten: Spotify geeft geen geluid door aan andere apps. De visuals nem
 
 ---
 
-## Bass en luistermodus
-
-- **Explosiviteit** (⚙ → Visuals): Rustig, Normaal of Explosief. Hoe ver de stekels van Urchin en Soul Beat en de golven van Glass Orb uitschieten op een bass-klap. Het beeld zelf beweegt, schudt of flitst niet mee.
-- **🎤 Luister**: de microfoon hoort de muziek in de kamer. Nummers met zware bass knallen dan ook echt harder, en het tempo wordt vanzelf herkend. Het geluid blijft op je toestel, er wordt niets opgenomen of verstuurd. Dit werkt het best als de muziek uit een box of tv komt. Werkt niet in de tv-browser.
-
 ## Verbinden: drie manieren
 
 ### Spotify (jij + max. 5 vrienden)

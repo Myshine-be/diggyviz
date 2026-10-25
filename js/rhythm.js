@@ -11,9 +11,6 @@ export const NB = 32;
 export const audio = {
   bands: new Float32Array(NB), peaks: new Float32Array(NB),
   kick: 0, snare: 0, hat: 0, energy: 0, level: 0, beat: 0, beatIdx: 0, t: 0, seed: 1,
-  bass: 0,   // low-end level 0..1
-  punch: 0,  // bass hit with a sharp attack 0..1 (drives the impact layer)
-  boom: 0,   // big drop 1 → 0
 };
 
 export function analyse(posMs, playing, seed, bpm, offMs, dt = 1 / 60) {
@@ -35,7 +32,7 @@ export function analyse(posMs, playing, seed, bpm, offMs, dt = 1 / 60) {
   for (let i = 0; i < NB; i++) {
     const f = i / (NB - 1);
     const base = noise(t * (1.4 + f * 3) + i * 3.7, seed) * (1 - f * 0.55);
-    const low = kick * Math.pow(1 - f, 2.2) * 1.35;
+    const low = kick * Math.pow(1 - f, 2.2) * 1.15;
     const mid = snare * Math.exp(-Math.pow((f - 0.45) / 0.18, 2)) * 0.8;
     const high = hat * Math.pow(f, 1.4) * 0.75;
     const target = clamp((base * 0.55 + low + mid + high) * energy * 0.95);
@@ -46,12 +43,6 @@ export function analyse(posMs, playing, seed, bpm, offMs, dt = 1 / 60) {
   }
   audio.kick = kick * energy; audio.snare = snare * energy; audio.hat = hat * energy;
   audio.energy = energy; audio.level = sum / NB;
-  // Bass impact: louder sections hit harder; every 16 bars an energetic section can open with a drop.
-  audio.punch = clamp(Math.exp(-ph * 11) * energy * (0.55 + 0.6 * section));
-  audio.bass = clamp(kick * energy * 0.9 + energy * section * 0.2);
-  const block = Math.floor(bp / 64), bb = bp - block * 64;
-  // noise() is 0..1; the block opens with a drop when its section is louder than average.
-  audio.boom = block >= 1 && posMs > 8000 && noise((block * 16) / 8, seed + 3) > 0.5 ? Math.exp(-bb * 0.8) * energy : 0;
   audio.beat = ph; audio.beatIdx = beatIdx;
   audio.t = t; audio.seed = seed;
 }

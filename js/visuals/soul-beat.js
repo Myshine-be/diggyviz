@@ -24,7 +24,7 @@ float blobSDF(vec2 q, out float ang) {
   // ferrofluid spikes
   float sp = pow(abs(sin(ang * 13.0 + uSongTime * 0.4)), 18.0);
   float sp2 = pow(abs(sin(ang * 21.0 - uSongTime * 0.3)), 30.0);
-  float amp = 0.006 + uKick * 0.035 + uPunch * 0.05 + uDrop * 0.05 + band(0.6) * 0.012;
+  float amp = 0.006 + uKick * 0.035 + uDrop * 0.05 + band(0.6) * 0.012;
   d -= (sp + sp2 * 0.6) * amp * (1.0 - smoothstep(-0.01, 0.03, d));
   // fuzzy edge
   d += (noise2(q * 90.0 + uTime * 0.6) - 0.5) * 0.006;

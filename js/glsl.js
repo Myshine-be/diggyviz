@@ -14,9 +14,6 @@ uniform float uSongTime;   // song position in seconds
 uniform float uBeat;       // beat phase 0..1 (0 = on the beat)
 uniform float uKick, uSnare, uHat, uEnergy, uLevel;
 uniform float uDrop;       // 1.0 right after a track change, decays to 0
-uniform float uBass;       // low-end level 0..1 (real in listening mode, simulated otherwise)
-uniform float uPunch;      // bass hit 0..~1.3, sharp attack, scaled by the "Explosiviteit" setting
-uniform float uBoom;       // 1.0 on a big drop, decays to 0 in ~1 s
 uniform float uTravel;     // integrated speed (for fly-through visuals)
 uniform float uSeed;       // per-track 0..999
 uniform float uBands[32];  // spectrum 0..1, low → high

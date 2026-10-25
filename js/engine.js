@@ -17,7 +17,6 @@ export class Engine {
     this.maxScale = 0.85;
     this.fadeDur = fadeDuration;
     this.travel = 0;
-    this.impact = { punch: 0, boom: 0 };
     this.frameMs = 16; this.lastAdapt = 0;
     this.art = null;
     this.#initResources();
@@ -130,12 +129,6 @@ export class Engine {
     const sceneDt = f.sceneDt ?? f.dt;
     for (const slot of [this.cur, this.old]) if (slot?.clock) slot.clock.advance(sceneDt, f.bpm);
     this.#adapt(f.dt, f.time);
-    // Bass hits for the visuals (uPunch/uBoom), scaled by the "Explosiviteit" setting (f.intensity, default 1).
-    const I = Number.isFinite(f.intensity) ? f.intensity : 1;
-    this.impact = {
-      punch: Math.min(1.3, (f.audio.punch || 0) * I),
-      boom: Math.min(1, (f.audio.boom || 0) * Math.min(1, I * 1.25)),
-    };
     this.travel += f.dt * (0.35 + f.audio.energy * 0.9 + f.audio.kick * 0.9 + f.drop * 6.0);
     if (this.fade < 1) this.fade = Math.min(1, this.fade + f.dt / this.fadeDur);
     if (this.fade >= 1 && this.old) { this.#freeSlot(this.old); this.old = null; }
@@ -157,7 +150,6 @@ export class Engine {
     this.#pass(this.post.blur, this.bloomA, (u) => { u.tex("uSrc", this.bloomB.tex, 0); u.v2("uDir", 0, 2 / this.BH); });
     // final
     const bloomAmt = (this.cur.vis.bloom ?? 0.9) * ease + (this.old ? (this.old.vis.bloom ?? 0.9) * (1 - ease) : 0);
-    // No full-screen effects on the beat (no shake, flash, zoom or bloom pumping): only the visuals themselves react.
     this.#pass(this.post.final, null, (u) => {
       u.tex("uScene", this.mixT.tex, 0); u.tex("uBloom", this.bloomA.tex, 1);
       u.f("uBloomAmt", bloomAmt); u.f("uTime", f.time); u.f("uGrain", 0.035);
@@ -184,7 +176,6 @@ export class Engine {
     set1("uDelta", f.dt); set1("uTime", f.time); set1("uSongTime", f.songTime); set1("uBeat", A.beat);
     set1("uKick", A.kick); set1("uSnare", A.snare); set1("uHat", A.hat); set1("uEnergy", A.energy); set1("uLevel", A.level);
     set1("uDrop", f.drop); set1("uTravel", this.travel); set1("uSeed", f.seed);
-    set1("uBass", A.bass || 0); set1("uPunch", this.impact?.punch || 0); set1("uBoom", this.impact?.boom || 0);
     if (L.uBands) gl.uniform1fv(L.uBands, A.bands);
     if (L.uPeaks) gl.uniform1fv(L.uPeaks, A.peaks);
     if (L.uPal) gl.uniform3fv(L.uPal, [...pal.dark, ...pal.mid, ...pal.hi, ...pal.hot].map((v) => v / 255));

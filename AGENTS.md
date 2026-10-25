@@ -17,8 +17,7 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
 | `js/app.js` | Wiring: sources → track state → rhythm → engine, UI, gestures |
 | `js/engine.js` | WebGL2 renderer: visual → crossfade → bloom → tonemap/grain. Adaptive resolution |
 | `js/glsl.js` | Shared GLSL header (uniforms + helpers) and post-processing shaders |
-| `js/rhythm.js` | Synthetic rhythm (no audio access): kick/snare/hat/energy/bass/punch/boom + 32 bands from song position + BPM |
-| `js/listen.js` | Listening mode: microphone → Web Audio → same `audio` fields as rhythm.js (real bass, kick detection, BPM). Pure `processSpectrum()` is unit-tested |
+| `js/rhythm.js` | Synthetic rhythm (no audio access): kick/snare/hat/energy + 32 bands from song position + BPM |
 | `js/palette.js` | Album-art → 4-colour palette |
 | `js/visuals/*.js` | One file per visual. Registry in `js/visuals/index.js` |
 | `js/sources/*.js` | `spotify.js`, `lastfm.js`, `demo.js` — same interface |
@@ -38,7 +37,7 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
    ```
 2. Import it in `js/visuals/index.js` and add it to `VISUALS`.
 3. The shader gets everything in `js/glsl.js` HEADER: `uSceneTime, uSceneBeat, uTime, uSongTime, uBeat, uKick, uSnare, uHat,
-   uEnergy, uLevel, uDrop, uBass, uPunch, uBoom, uTravel, uSeed, uBands[32], uPeaks[32], uPal[4], uPrev, uArt` and helpers
+   uEnergy, uLevel, uDrop, uTravel, uSeed, uBands[32], uPeaks[32], uPal[4], uPrev, uArt` and helpers
    `P(), rot(), smin(), hash*, noise2/3, fbm2, band(x), peak(x), pal(t), wave(x), gridLine(x,w)`.
    Do not redeclare these.
 
@@ -52,19 +51,6 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
 - Use `P()` for coordinates: shorter screen side spans −0.5…0.5, works in portrait and landscape.
 - Anti-alias edges with `fwidth` / `px = 1.5 / min(uRes.x, uRes.y)`.
 
-## Bass impact
-- `uPunch` (bass hit, already scaled by the user's "Explosiviteit" setting, up to ~1.3), `uBass` and `uBoom` (drop, 1 → 0)
-  are available to every visual. Let the **shapes** react (size, spikes, waves, speed), not the whole screen.
-- **Photosensitivity rule:** no full-screen shake, flash, strobe, zoom-pulse, colour split or bloom pumping on the beat.
-  Avoid large bright areas that change brightness with the rhythm (WCAG 2.3.1: max 3 flashes per second). Mo removed
-  these after eye strain; do not reintroduce them.
-- Also no speed surges (`uTravel`), camera jumps or whole-object size pulses on the bass: on screen those read as
-  shaking. React with detail inside the shape only (spike length, surface waves).
-  Same for the camera/frame: never scale, squash, zoom or speed up the whole view with uKick/uPunch (removed in 2.1.3
-  from Night Drive, Moiré, Warp and Tunnel). uDrop (once per track change) is fine.
-- Keep raymarched shapes inside their bounding sphere (see `urchin.js`).
-- Listening mode needs HTTPS and a user tap (browser rule). Never record, store or send microphone audio.
-
 ## Source interface
 `createXSource({ onTrack, onStatus })` → `{ start(), stop() }`.
 `onTrack({ id, name, artists, art, dur, prog, playing, palette?, bpm? })` or `onTrack(null)` when nothing plays.
@@ -77,6 +63,8 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
 - Do not change the localStorage keys (`rv.*`); users would lose their login.
 - Do not use existing characters, mascots, logos or brand figures (Pac-Man, Crash Bandicoot, Mario, Sonic, …),
   not even renamed or mixed — the site is public. Invent original characters (see `bloop.js`).
+- No shaking, flashing, strobing, zooming or speed surges of the whole view on the beat (photosensitivity, eye strain).
+  Only small details inside a shape may react to uKick.
 - Spotify's audio-features / audio-analysis endpoints are closed for new apps — don't build on them.
 
 ## Testing before you commit
