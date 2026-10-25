@@ -23,7 +23,7 @@ float field(vec3 m) {
   w += sin(dot(m, normalize(vec3(0.7, 0.2, -0.6))) * 26.0 - t * 5.0) * uHat * 0.5;
   w += sin(lat * 30.0 - uTime * 10.0) * uKick * exp(-lat * 0.8) * 0.9;
   w += uDrop * sin(lat * 18.0 - uTime * 14.0);
-  w += sin(lat * 24.0 - uTime * 12.0) * uPunch * 0.9 + sin(lat * 12.0 - uTime * 20.0) * uBoom * 1.2;
+  w += sin(lat * 24.0 - uTime * 12.0) * uPunch * 0.7;
   return w;
 }
 
@@ -49,7 +49,7 @@ void main() {
   vec2 p = P();
   vec3 ro = vec3(0.0, 0.0, 2.6);
   vec3 rd = normalize(vec3(p, -1.45));
-  float R = 0.6 * (1.0 + uKick * 0.035 + uPunch * 0.09 + uBoom * 0.08 + uDrop * 0.06);
+  float R = 0.6 * (1.0 + uKick * 0.035 + uDrop * 0.06);
   mat3 o = orient();
 
   vec3 col = uPal[0] * 0.25 + pal(0.5) * 0.05 * exp(-dot(p, p) * 4.0);

@@ -58,6 +58,8 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
 - **Photosensitivity rule:** no full-screen shake, flash, strobe, zoom-pulse, colour split or bloom pumping on the beat.
   Avoid large bright areas that change brightness with the rhythm (WCAG 2.3.1: max 3 flashes per second). Mo removed
   these after eye strain; do not reintroduce them.
+- Also no speed surges (`uTravel`), camera jumps or whole-object size pulses on the bass: on screen those read as
+  shaking. React with detail inside the shape only (spike length, surface waves).
 - Keep raymarched shapes inside their bounding sphere (see `urchin.js`).
 - Listening mode needs HTTPS and a user tap (browser rule). Never record, store or send microphone audio.
 

@@ -136,7 +136,7 @@ export class Engine {
       punch: Math.min(1.3, (f.audio.punch || 0) * I),
       boom: Math.min(1, (f.audio.boom || 0) * Math.min(1, I * 1.25)),
     };
-    this.travel += f.dt * (0.35 + f.audio.energy * 0.9 + f.audio.kick * 0.9 + f.drop * 6.0 + this.impact.punch * 1.4 + this.impact.boom * 4.0);
+    this.travel += f.dt * (0.35 + f.audio.energy * 0.9 + f.audio.kick * 0.9 + f.drop * 6.0);
     if (this.fade < 1) this.fade = Math.min(1, this.fade + f.dt / this.fadeDur);
     if (this.fade >= 1 && this.old) { this.#freeSlot(this.old); this.old = null; }
 

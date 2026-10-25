@@ -29,7 +29,7 @@ vec3 bars(vec2 p, float halfW, out float lit) {
   float capY = floor(pk / CELL) * CELL + CELL;
   float cap = step(abs(p.y - capY - CELL * 0.35), CELL * 0.35) * step(0.01, pk);
   lit = on * colMask * segMask;
-  vec3 col = c * lit * (1.05 + uKick * 0.6 + uPunch * 0.3);
+  vec3 col = c * lit * (1.05 + uKick * 0.6);
   col += c * 0.05 * colMask * segMask * step(p.y, MAXH);    // unlit LEDs
   col = mix(col, vec3(1.0), cap * colMask * 0.9);
   return col;

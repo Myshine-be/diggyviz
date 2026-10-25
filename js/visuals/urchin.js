@@ -61,7 +61,7 @@ float spikeLen(vec3 q, float id) {
   float b = band(1.0 - lat);
   float jitter = 0.8 + 0.4 * hash13(vec3(id, 1.7, 3.1));
   float e = max(uEnergy, 0.12);
-  float raw = (0.10 + e * (0.18 + 0.75 * b * f) + uKick * 0.22 * f + uPunch * 0.55 * (0.4 + f) + uBoom * 0.7 + uDrop * 0.4 * f) * jitter;
+  float raw = (0.10 + e * (0.18 + 0.75 * b * f) + uKick * 0.22 * f + uPunch * 0.45 * (0.4 + f) + uDrop * 0.4 * f) * jitter;
   // Smooth saturation keeps every tip inside the bounding sphere, even on a track change.
   return 0.08 + 0.78 * (1.0 - exp(-raw));
 }
@@ -84,8 +84,7 @@ vec3 calcNormal(vec3 p) {
 
 void main() {
   vec2 p = P();
-  // The core may grow at most 0.08 so R stays <= 0.54 (see the camera note below).
-  R = 0.46 + min(0.08, max(uKick * 0.03, uPunch * 0.05) + uDrop * 0.05);
+  R = 0.46 + uKick * 0.03 + uDrop * 0.05;
   // Max extent is R(0.54) + L(0.86) = 1.40; with a 0.37 half-FOV tangent that fits the
   // portrait width from distance >= 4.03. 4.05 keeps the orb as large as possible.
   vec3 ro = vec3(0.0, 0.0, 4.05);
