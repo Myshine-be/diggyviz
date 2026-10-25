@@ -17,7 +17,8 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
 | `js/app.js` | Wiring: sources → track state → rhythm → engine, UI, gestures |
 | `js/engine.js` | WebGL2 renderer: visual → crossfade → bloom → tonemap/grain. Adaptive resolution |
 | `js/glsl.js` | Shared GLSL header (uniforms + helpers) and post-processing shaders |
-| `js/rhythm.js` | Synthetic rhythm (no audio access): kick/snare/hat/energy + 32 bands from song position + BPM |
+| `js/rhythm.js` | Synthetic rhythm (no audio access): kick/snare/hat/energy/bass/punch/boom + 32 bands from song position + BPM |
+| `js/listen.js` | Listening mode: microphone → Web Audio → same `audio` fields as rhythm.js (real bass, kick detection, BPM). Pure `processSpectrum()` is unit-tested |
 | `js/palette.js` | Album-art → 4-colour palette |
 | `js/visuals/*.js` | One file per visual. Registry in `js/visuals/index.js` |
 | `js/sources/*.js` | `spotify.js`, `lastfm.js`, `demo.js` — same interface |
@@ -37,7 +38,7 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
    ```
 2. Import it in `js/visuals/index.js` and add it to `VISUALS`.
 3. The shader gets everything in `js/glsl.js` HEADER: `uSceneTime, uSceneBeat, uTime, uSongTime, uBeat, uKick, uSnare, uHat,
-   uEnergy, uLevel, uDrop, uTravel, uSeed, uBands[32], uPeaks[32], uPal[4], uPrev, uArt` and helpers
+   uEnergy, uLevel, uDrop, uBass, uPunch, uBoom, uTravel, uSeed, uBands[32], uPeaks[32], uPal[4], uPrev, uArt` and helpers
    `P(), rot(), smin(), hash*, noise2/3, fbm2, band(x), peak(x), pal(t), wave(x), gridLine(x,w)`.
    Do not redeclare these.
 
@@ -50,6 +51,12 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
 - Output can exceed 1.0; the final pass tone-maps (ACES) and adds bloom, vignette and grain.
 - Use `P()` for coordinates: shorter screen side spans −0.5…0.5, works in portrait and landscape.
 - Anti-alias edges with `fwidth` / `px = 1.5 / min(uRes.x, uRes.y)`.
+
+## Bass impact
+- `uPunch` (bass hit, already scaled by the user's "Explosiviteit" setting, up to ~1.3) and `uBoom` (drop, 1 → 0)
+  drive a global impact layer in `FINAL_FRAG` (zoom-pulse, shake, RGB split, flash, shockwave). Every visual gets it for free.
+- Visuals may react to `uPunch`/`uBoom` too, but keep raymarched shapes inside their bounding sphere (see `urchin.js`).
+- Listening mode needs HTTPS and a user tap (browser rule). Never record, store or send microphone audio.
 
 ## Source interface
 `createXSource({ onTrack, onStatus })` → `{ start(), stop() }`.

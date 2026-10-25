@@ -130,3 +130,6 @@ summary { cursor: pointer; color: var(--ink-2); font-size: 14px; }
 @media (prefers-reduced-motion: reduce) { .hud, .caption { transition: none; } }
 
 button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* bass: listening mode */
+#listenRow:not([hidden]) { display: flex; flex-direction: column; gap: 10px; }

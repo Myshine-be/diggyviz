@@ -1,0 +1,156 @@
+// Listening mode: the microphone hears the music in the room, so bass is real.
+// Sound stays on the device: it is analysed live and never recorded or sent.
+// Pure analysis lives in makeDetector()/processSpectrum() so it can be tested without Web Audio.
+
+const clamp = (v, a = 0, b = 1) => v < a ? a : v > b ? b : v;
+
+/** Log-spaced band ranges [from, to) in FFT bins. */
+export function bandEdges(sampleRate, fftSize, nb = 32, fmin = 30, fmax = 12000) {
+  const hz = sampleRate / fftSize, bins = fftSize / 2;
+  const edges = [];
+  for (let i = 0; i < nb; i++) {
+    const f0 = fmin * Math.pow(fmax / fmin, i / nb), f1 = fmin * Math.pow(fmax / fmin, (i + 1) / nb);
+    const a = Math.min(bins - 1, Math.floor(f0 / hz)), b = Math.min(bins, Math.max(a + 1, Math.ceil(f1 / hz)));
+    edges.push([a, b]);
+  }
+  return edges;
+}
+
+const avgBins = (spec, a, b) => { let s = 0; for (let i = a; i < b; i++) s += spec[i]; return s / Math.max(1, b - a) / 255; };
+
+export function makeDetector(sampleRate, fftSize, nb = 32) {
+  const hz = sampleRate / fftSize;
+  const bin = (f) => Math.max(1, Math.round(f / hz));
+  return {
+    nb, edges: bandEdges(sampleRate, fftSize, nb),
+    bassR: [bin(30), bin(150) + 1], bodyR: [bin(300), bin(3000) + 1], body: 0.3, midR: [bin(1500), bin(4000) + 1], hiR: [bin(6000), bin(12000) + 1],
+    bandMax: new Float32Array(nb).fill(0.25),
+    bassMax: 0.3, bassFloor: 0.1, prevBass: 0, fluxAvg: 0.02,
+    prevMid: 0, prevHi: 0, midAvg: 0.02, hiAvg: 0.02,
+    levelMax: 0.25, slow: 0, fast: 0, quiet: 0,
+    t: 0, lastKick: -1, kicks: [], bpm: 120, phaseAt: 0,
+    kick: 0, snare: 0, hat: 0, punch: 0, boom: 0, beatIdx: 0,
+  };
+}
+
+/**
+ * Turn one byte spectrum (AnalyserNode.getByteFrequencyData) into the same
+ * fields rhythm.js produces, written into `out` (the shared audio object).
+ */
+export function processSpectrum(st, spec, dt, out) {
+  dt = clamp(Number.isFinite(dt) ? dt : 1 / 60, 0, 0.1);
+  st.t += dt;
+  const decay = (v, rate) => v * Math.exp(-dt * rate);
+
+  // spectrum bands with per-band automatic gain
+  let sum = 0;
+  for (let i = 0; i < st.nb; i++) {
+    const [a, b] = st.edges[i];
+    const v = avgBins(spec, a, b);
+    st.bandMax[i] = Math.max(v, st.bandMax[i] - dt * 0.05, 0.12);
+    const target = clamp(v / st.bandMax[i]) * (1 - (i / st.nb) * 0.25);
+    const cur = out.bands[i];
+    out.bands[i] = target > cur ? target : Math.max(target, cur - 2.4 * dt);
+    out.peaks[i] = Math.max(out.peaks[i] - 0.48 * dt, out.bands[i]);
+    sum += out.bands[i];
+  }
+
+  // bass level, normalised between a slow floor and a slow-falling maximum
+  const rawBass = avgBins(spec, st.bassR[0], st.bassR[1]);
+  st.bassMax = Math.max(rawBass, st.bassMax - dt * 0.04, 0.15);
+  st.bassFloor = rawBass < st.bassFloor ? rawBass : st.bassFloor + (rawBass - st.bassFloor) * (1 - Math.exp(-dt * 0.3));
+  const rel = clamp((rawBass - st.bassFloor * 0.85) / Math.max(0.05, st.bassMax - st.bassFloor * 0.85));
+  // How bass-heavy is the music? Bass level above the body of the mix (300 Hz–3 kHz), in byte-dB:
+  // ~0 for acoustic/vocal songs, +0.15..0.3 (10–20 dB) for hip-hop/EDM. Volume-independent.
+  st.body += (avgBins(spec, st.bodyR[0], st.bodyR[1]) - st.body) * (1 - Math.exp(-dt * 2));
+  const heavy = clamp(0.35 + (rawBass - st.body) * 2.6, 0.2, 1);
+  const bass = rel * heavy;
+
+  // kick = sudden rise in bass (spectral flux) above the recent average
+  const flux = Math.max(0, bass - st.prevBass);
+  st.prevBass = bass;
+  st.fluxAvg += (flux - st.fluxAvg) * (1 - Math.exp(-dt * 1.5));
+  const isKick = flux > Math.max(0.04, st.fluxAvg * 3.2) && rel > 0.35 && st.t - st.lastKick > 0.22;
+  if (isKick) {
+    if (st.lastKick >= 0) {
+      const iv = st.t - st.lastKick;
+      if (iv > 0.27 && iv < 1.2) { st.kicks.push(iv); if (st.kicks.length > 16) st.kicks.shift(); }
+    }
+    st.lastKick = st.t; st.phaseAt = st.t; st.beatIdx++;
+    st.kick = 1; st.punch = Math.max(st.punch, clamp((0.3 + rel * 0.7) * heavy * 1.15));
+    if (st.kicks.length >= 4) {
+      const s = [...st.kicks].sort((x, y) => x - y), med = s[s.length >> 1];
+      let bpm = 60 / med; while (bpm < 80) bpm *= 2; while (bpm > 180) bpm /= 2;
+      st.bpm += (bpm - st.bpm) * 0.3;
+    }
+  }
+  st.kick = decay(st.kick, 7); st.punch = decay(st.punch, 9);
+
+  // snare / hats from mid and high flux
+  const mid = avgBins(spec, st.midR[0], st.midR[1]), hi = avgBins(spec, st.hiR[0], st.hiR[1]);
+  const mf = Math.max(0, mid - st.prevMid), hf = Math.max(0, hi - st.prevHi);
+  st.prevMid = mid; st.prevHi = hi;
+  st.midAvg += (mf - st.midAvg) * (1 - Math.exp(-dt * 1.5)); st.hiAvg += (hf - st.hiAvg) * (1 - Math.exp(-dt * 1.5));
+  st.snare = mf > Math.max(0.03, st.midAvg * 3) ? 1 : decay(st.snare, 9);
+  st.hat = hf > Math.max(0.02, st.hiAvg * 3) ? 1 : decay(st.hat, 16);
+
+  // overall energy with automatic gain; a drop = loud bass after a quieter stretch
+  const level = sum / st.nb;
+  st.levelMax = Math.max(level, st.levelMax - dt * 0.03, 0.1);
+  const energy = clamp(level / st.levelMax * 1.1);
+  st.fast += (rel - st.fast) * (1 - Math.exp(-dt * 4));
+  st.slow += (rel - st.slow) * (1 - Math.exp(-dt * 0.25));
+  st.quiet = st.slow < 0.45 ? Math.min(st.quiet + dt, 10) : Math.max(0, st.quiet - dt * 2);
+  if (st.boom < 0.05 && st.quiet > 2.5 && st.fast > 0.75 && st.fast > st.slow * 1.6) { st.boom = 1; st.quiet = 0; }
+  st.boom = decay(st.boom, 1.6);
+
+  const beatLen = 60 / st.bpm;
+  out.kick = st.kick * energy; out.snare = st.snare * energy; out.hat = st.hat * energy;
+  out.energy = energy; out.level = level; out.bass = bass;
+  out.punch = st.punch; out.boom = st.boom;
+  out.beat = ((st.t - st.phaseAt) / beatLen) % 1; out.beatIdx = st.beatIdx;
+  out.t = st.t;
+  return out;
+}
+
+/** Microphone + Web Audio wrapper. */
+export function createListener({ onStatus = () => {} } = {}) {
+  let ctx = null, stream = null, an = null, buf = null, st = null;
+  const L = {
+    get supported() { return !!(navigator.mediaDevices?.getUserMedia && (window.AudioContext || window.webkitAudioContext)); },
+    get active() { return !!an; },
+    get bpm() { return st?.bpm ?? 120; },
+    async start() {
+      if (an) return true;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+        if (ctx.state === "suspended") await ctx.resume();
+        const srcNode = ctx.createMediaStreamSource(stream);
+        an = ctx.createAnalyser();
+        an.fftSize = 2048; an.smoothingTimeConstant = 0.45; an.minDecibels = -90; an.maxDecibels = -15;
+        srcNode.connect(an); // not connected to the speakers: no echo
+        buf = new Uint8Array(an.frequencyBinCount);
+        st = makeDetector(ctx.sampleRate, an.fftSize);
+        stream.getAudioTracks()[0]?.addEventListener("ended", () => { L.stop(); onStatus("Luisteren gestopt: de microfoon is niet meer beschikbaar.", true); });
+        return true;
+      } catch (e) {
+        L.stop();
+        onStatus(e?.name === "NotAllowedError" ? "Geen toegang tot de microfoon. Sta het toe in de instellingen van je browser." : "Luisteren lukt niet op dit toestel.", true);
+        return false;
+      }
+    },
+    stop() {
+      try { stream?.getTracks().forEach((t) => t.stop()); } catch {}
+      try { ctx?.close(); } catch {}
+      ctx = stream = an = buf = st = null;
+    },
+    /** Fill the shared audio object for this frame. */
+    analyse(out, dt) {
+      if (!an) return;
+      an.getByteFrequencyData(buf);
+      processSpectrum(st, buf, dt, out);
+    },
+  };
+  return L;
+}

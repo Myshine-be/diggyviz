@@ -10,6 +10,7 @@ import { VISUALS } from "./visuals/index.js";
 import * as spotify from "./sources/spotify.js";
 import { createLastfmSource } from "./sources/lastfm.js";
 import { createDemoSource } from "./sources/demo.js";
+import { createListener } from "./listen.js";
 
 if (window.__bridge) throw new Error("iOS bridge redirect");
 
@@ -26,6 +27,9 @@ let auto = store.get("auto", true);
 let lastSwitch = performance.now();
 let firstTrack = true;
 let sourceVersion = 0;
+const PUNCH_LEVELS = { rustig: 0.35, normaal: 0.8, explosief: 1.25 };
+let punchLevel = PUNCH_LEVELS[store.get("punch", "explosief")] ? store.get("punch", "explosief") : "explosief";
+const listener = createListener({ onStatus: (m, err) => status(m, err) });
 
 function clonePal(p) { return { dark: [...p.dark], mid: [...p.mid], hi: [...p.hi], hot: [...p.hot] }; }
 const position = () => track.playing ? Math.min(track.dur, track.prog + (performance.now() - track.at)) : track.prog;
@@ -114,7 +118,7 @@ function useSource(name) {
   status("");
   sourceName = name; store.set("source", name);
   $("srcBadge").textContent = name === "lastfm" ? "last.fm" : name;
-  document.querySelectorAll(".seg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.src === name)));
+  document.querySelectorAll(".seg button[data-src]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.src === name)));
   document.querySelectorAll("section[data-for]").forEach((s) => { s.hidden = s.dataset.for !== name; });
   track.id = ""; firstTrack = true;
   const cb = {
@@ -148,12 +152,15 @@ function refreshSpotifyState() {
 }
 
 /* ---------------- render loop ---------------- */
-let last = performance.now(), t0 = last;
+let last = performance.now(), t0 = last, lastBpmShown = 0;
 function frame(now) {
   const elapsed = Math.max(0, (now - last) / 1000);
   const dt = Math.min(0.1, elapsed); last = now;
   const pos = position();
-  analyse(pos, track.playing, hashStr(track.id || "x"), tempo.bpm, tempo.off, dt);
+  if (listener.active) listener.analyse(audio, dt);
+  else analyse(pos, track.playing, hashStr(track.id || "x"), tempo.bpm, tempo.off, dt);
+  const bpmNow = listener.active ? listener.bpm : tempo.bpm;
+  if (listener.active && now - lastBpmShown > 1000) { lastBpmShown = now; $("tap").firstChild.nodeValue = Math.round(bpmNow) + " "; }
   drop = Math.max(0, drop - dt * 0.7);
   const k = 1 - Math.exp(-dt * 2.2);
   for (const key of ["dark", "mid", "hi", "hot"]) for (let i = 0; i < 3; i++) palCur[key][i] += (palTarget[key][i] - palCur[key][i]) * k;
@@ -164,7 +171,7 @@ function frame(now) {
 
   if (engine) {
     try {
-      engine.render({ sceneDt: document.visibilityState === "visible" && track.playing && !sheetOpen() ? elapsed : 0, bpm: tempo.bpm, time: (now - t0) / 1000, dt, songTime: pos / 1000, audio, pal: palCur, drop, seed: hashStr(track.id || "x") % 1000 });
+      engine.render({ sceneDt: document.visibilityState === "visible" && track.playing && !sheetOpen() ? elapsed : 0, bpm: bpmNow, time: (now - t0) / 1000, dt, songTime: pos / 1000, audio, pal: palCur, drop, seed: hashStr(track.id || "x") % 1000, intensity: PUNCH_LEVELS[punchLevel] });
     } catch (e) { console.error(e); }
   }
   $("bar").style.width = (track.dur ? (pos / track.dur) * 100 : 0) + "%";
@@ -196,6 +203,40 @@ function setAuto(on) {
   lastSwitch = performance.now();
 }
 $("autoBtn").addEventListener("click", () => setAuto(!auto));
+
+/* bass: "Explosiviteit" + listening mode (microphone) */
+function setPunch(level) {
+  punchLevel = PUNCH_LEVELS[level] ? level : "explosief"; store.set("punch", punchLevel);
+  document.querySelectorAll(".seg button[data-punch]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.punch === punchLevel)));
+}
+document.querySelectorAll(".seg button[data-punch]").forEach((b) => b.addEventListener("click", () => setPunch(b.dataset.punch)));
+setPunch(punchLevel);
+
+function showListen() {
+  const on = listener.active;
+  $("listenBtn").setAttribute("aria-pressed", String(on));
+  $("listenChk").checked = on;
+  if (!on) $("tap").firstChild.nodeValue = Math.round(tempo.bpm) + " ";
+}
+async function setListen(on) {
+  if (on) {
+    status("Luisteren… zet de muziek luid genoeg.");
+    if (await listener.start()) status("Luistermodus aan: de visuals volgen nu de echte bass.");
+  } else { listener.stop(); status("Luistermodus uit."); }
+  store.set("listen", listener.active);
+  showListen();
+}
+$("listenBtn").hidden = !listener.supported;
+$("listenRow").hidden = !listener.supported;
+$("listenBtn").addEventListener("click", (e) => { e.stopPropagation(); setListen(!listener.active); });
+$("listenChk").addEventListener("change", (e) => setListen(e.target.checked));
+// Browsers only allow the microphone after a tap, so a saved "on" resumes on the first interaction.
+if (listener.supported && store.get("listen", false)) {
+  document.addEventListener("pointerdown", function resume(e) {
+    document.removeEventListener("pointerdown", resume, true);
+    if (!listener.active && e.target?.id !== "listenBtn" && e.target?.id !== "listenChk") setListen(true);
+  }, true);
+}
 $("autoChk").addEventListener("change", (e) => setAuto(e.target.checked));
 
 const canFs = !!document.documentElement.requestFullscreen;
@@ -236,7 +277,7 @@ document.addEventListener("visibilitychange", () => { last = performance.now(); 
 $("settingsBtn").addEventListener("click", () => { refreshSpotifyState(); $("settings").hidden = false; });
 $("closeSettings").addEventListener("click", () => { $("settings").hidden = true; wake(); });
 $("settings").addEventListener("click", (e) => { if (e.target === $("settings")) { $("settings").hidden = true; wake(); } });
-document.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () => useSource(b.dataset.src)));
+document.querySelectorAll(".seg button[data-src]").forEach((b) => b.addEventListener("click", () => useSource(b.dataset.src)));
 document.querySelectorAll(".choice").forEach((b) => b.addEventListener("click", () => {
   $("onboard").hidden = true;
   useSource(b.dataset.pick);
@@ -286,4 +327,4 @@ $("version").textContent = "DiggyViz " + CONFIG.VERSION;
 })();
 
 // test/debug hook
-window.diggy = { setVisual, stepVisual, get engine() { return engine; }, onTrack, useSource };
+window.diggy = { setVisual, stepVisual, get engine() { return engine; }, onTrack, useSource, audio, setPunch, setListen, get listening() { return listener.active; } };
