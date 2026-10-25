@@ -43,7 +43,7 @@ chrome.stdio[4].on('data', bytes => {
     if (message.id) {
       const p = pending.get(message.id); if (!p) continue;
       clearTimeout(p.timer); pending.delete(message.id);
-      message.error ? p.reject(new Error(JSON.stringify(message.error))) : p.resolve(message.result);
+      message.error ? p.reject(new Error(p.method+": "+JSON.stringify(message.error))) : p.resolve(message.result);
     } else events.push(message);
   }
 });
@@ -51,7 +51,7 @@ function send(method, params = {}, sessionId = session) {
   return new Promise((resolve, reject) => {
     const id = ++seq;
     const timer = setTimeout(() => { pending.delete(id); reject(new Error(`Timeout: ${method}`)); }, 60000);
-    pending.set(id, { resolve, reject, timer });
+    pending.set(id, { resolve, reject, timer, method });
     chrome.stdio[3].write(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }) + '\0');
   });
 }
@@ -185,7 +185,7 @@ try {
 
   // Exercise the production tempo UI with deterministic responses, including stale song results.
   await evaluate(`window.__srcdoc=Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype,'srcdoc');
-    Object.defineProperty(HTMLIFrameElement.prototype,'srcdoc',{configurable:true,get:window.__srcdoc.get,set(v){window.__srcdoc.set.call(this,v.replaceAll('https://api.deezer.com',location.origin+'/qa-deezer'));}});`);
+    void Object.defineProperty(HTMLIFrameElement.prototype,'srcdoc',{configurable:true,get:window.__srcdoc.get,set(v){window.__srcdoc.set.call(this,v.replaceAll('https://api.deezer.com',location.origin+'/qa-deezer'));}});`);
   await evaluate(`window.diggy.onTrack({id:'tempo-found',isrc:'USUM71703861',name:'Found',artists:'Fixture',dur:200000,prog:10000,playing:true})`);
   await waitFor("window.diggy.tempo.bpm===128");
   assert.equal(await evaluate("document.querySelector('#tap small').textContent"),'AUTO');
@@ -194,7 +194,7 @@ try {
   await evaluate(`window.diggy.onTrack({id:'tempo-missing',name:'missing',artists:'Fixture',dur:200000,prog:10000,playing:true})`);
   await waitFor("document.querySelector('#tap small').textContent==='SCHAT'");
   assert.match(await evaluate("document.querySelector('#tempoStatus').textContent"),/Geen tempo/);
-  await evaluate("Object.defineProperty(HTMLIFrameElement.prototype,'srcdoc',window.__srcdoc)");
+  await evaluate("void Object.defineProperty(HTMLIFrameElement.prototype,'srcdoc',window.__srcdoc)");
   results.push({test:'tempo source, unknown fallback and manual override',passed:true});
 
   // Real Web Audio pipeline with a local oscillator MediaStream (no microphone/hardware claim).
@@ -227,6 +227,39 @@ try {
   assert.equal(await evaluate('window.diggy.engine.currentVisual.id'), 'nightdrive');
   assert.equal(await evaluate(`document.querySelector('[data-pick="lastfm"]').disabled`), true);
   results.push({test:'saved visual fallback and unavailable Last.fm',passed:true});
+  // Low-resolution temporal diagnostic, not a WCAG/medical certification or an FPS test.
+  // Exercise consecutive frames with hard 150 BPM attacks, including the two arrivals.
+  await send('Emulation.setDeviceMetricsOverride',{width:120,height:214,deviceScaleFactor:1,mobile:true});
+  const motion=[];
+  for (const id of ids) {
+    const stats=await evaluate(`(async()=>{
+      const {pushHistory,setWave,WAVE_N,HIST_ROWS}=await import('./js/audio-data.js');
+      const d={bytes:new Uint8Array(WAVE_N*(HIST_ROWS+1)),head:0,live:true,acc:0};
+      const e=window.diggy.engine;e.setVisual('${id}',{instant:true});e.scale=.6;e.maxScale=.6;
+      const a={bands:new Float32Array(32),peaks:new Float32Array(32),kick:0,snare:0,hat:0,energy:.65,level:.4,beat:0};
+      const pal={dark:[2,4,8],mid:[25,180,135],hi:[185,240,225],hot:[220,95,180]};
+      const wave=new Float32Array(128),srgb=Array.from({length:256},(_,v)=>{v/=255;return v<=.04045?v/12.92:Math.pow((v+.055)/1.055,2.4)});
+      let prev=null,lastMean=0,maxMeanDelta=0,maxArea=.0,totalMean=0;
+      const frames=['nightdrive','bloop'].includes('${id}')?240:60;
+      for(let n=0;n<frames;n++){
+        const t=90+n/30,phase=(t*2.5)%1,hit=Math.exp(-phase*10);
+        a.beat=phase;a.kick=hit;a.snare=hit*.7;a.hat=hit*.5;
+        for(let k=0;k<32;k++){a.bands[k]=.15+hit*.7*(1-k/40);a.peaks[k]=a.bands[k];}
+        for(let k=0;k<128;k++)wave[k]=Math.sin(k*.21)*(.15+hit*.75);
+        pushHistory(a.bands,d);setWave(wave,d);e.cur.clock.seconds=t;e.cur.clock.beats=t*2.5;
+        e.render({time:t,dt:1/30,sceneDt:0,bpm:150,songTime:t,audio:a,pal,drop:0,seed:11,sound:d});
+        const pixels=new Uint8Array(e.W*e.H*4),lum=new Float32Array(e.W*e.H);e.gl.readPixels(0,0,e.W,e.H,e.gl.RGBA,e.gl.UNSIGNED_BYTE,pixels);
+        let mean=0,area=0;
+        for(let k=0;k<lum.length;k++){const j=k*4;lum[k]=.2126*srgb[pixels[j]]+.7152*srgb[pixels[j+1]]+.0722*srgb[pixels[j+2]];mean+=lum[k];if(prev&&Math.abs(lum[k]-prev[k])>.1)area++;}
+        mean/=lum.length;if(prev)maxMeanDelta=Math.max(maxMeanDelta,Math.abs(mean-lastMean));maxArea=Math.max(maxArea,area/lum.length);
+        prev=lum;lastMean=mean;totalMean+=mean;
+      }
+      return {id:'${id}',frames,maxMeanDelta,maxArea,averageLuminance:totalMean/frames,glError:e.gl.getError()};
+    })()`);
+    assert.equal(stats.glError,0);motion.push(stats);
+  }
+  await writeFile(resolve(root,'test-results/motion.json'),JSON.stringify(motion,null,2));
+  results.push({test:'consecutive-frame diagnostics (120x214, 30 Hz, synthetic audio)',motion});
   const exceptions = events.filter(e => e.method === 'Runtime.exceptionThrown');
   const errors = events.filter(e => e.method === 'Runtime.consoleAPICalled' && e.params.type === 'error');
   assert.deepEqual(exceptions, []); assert.deepEqual(errors, []);
