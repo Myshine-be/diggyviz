@@ -10,6 +10,12 @@ import assert from 'node:assert/strict';
 const root = resolve(import.meta.dirname, '..');
 const server = createServer(async (req, res) => {
   try {
+    const route = new URL(req.url, 'http://localhost').pathname;
+    if (route.startsWith('/qa-jsonp') || route.startsWith('/qa-deezer')) {
+      res.setHeader('Content-Type','text/javascript');
+      res.end(route.includes('missing') || route.includes('/search') ? '__tempo({data:[]})' :
+        'let isolated=false;try{parent.localStorage.getItem("rv.tok")}catch(e){isolated=true}__tempo({bpm:128,isolated})');return;
+    }
     const path = resolve(root, '.' + (new URL(req.url, 'http://localhost').pathname === '/' ? '/index.html' : new URL(req.url, 'http://localhost').pathname));
     if (!path.startsWith(root + '/')) { res.writeHead(403).end(); return; }
     res.setHeader('Content-Type', ({ '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html' })[extname(path)] || 'application/octet-stream');
@@ -50,7 +56,7 @@ function send(method, params = {}, sessionId = session) {
   });
 }
 async function evaluate(expression) {
-  const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
+  const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true, userGesture: true });
   if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails));
   return r.result.value;
 }
@@ -106,11 +112,11 @@ try {
       const e=window.diggy.engine;e.setVisual('${id}',{instant:true});window.diggy.setVisual('${id}');
       if(document.querySelector('#autoBtn').getAttribute('aria-pressed')!=='true')document.querySelector('#autoBtn').click();
       e.cur.clock.seconds=89;e.cur.clock.beats=178;
-      await window.diggy.onTrack({id:'story-track-${id}',name:'Nachtrit',artists:'DiggyViz',art:'',dur:200000,prog:0,playing:true});
+      await window.diggy.onTrack({id:'story-track-${id}',name:'Nachtrit',artists:'DiggyViz',art:'',bpm:120,dur:200000,prog:0,playing:true});
       const kept=e.currentVisual.id==='${id}'&&e.cur.clock.seconds===89;
       window.__step(.5);
       const elapsed=e.cur.clock.seconds;
-      await window.diggy.onTrack({id:'story-track-${id}',name:'Nachtrit',artists:'DiggyViz',art:'',dur:200000,prog:0,playing:false});
+      await window.diggy.onTrack({id:'story-track-${id}',name:'Nachtrit',artists:'DiggyViz',art:'',bpm:120,dur:200000,prog:0,playing:false});
       window.__step(5);
       const paused=e.cur.clock.seconds===elapsed;
       document.querySelector('#autoBtn').click();
@@ -120,7 +126,7 @@ try {
     results.push({test:id+' story lifecycle',...result});
     for (const time of [35,89.9,94.5,96,100,106,118,121,180]) {
       await evaluate(`(async()=>{
-        await window.diggy.onTrack({id:'frame-${id}',name:'Nachtrit',artists:'DiggyViz',art:'',dur:200000,prog:16000,playing:false});
+        await window.diggy.onTrack({id:'frame-${id}',name:'Nachtrit',artists:'DiggyViz',art:'',bpm:120,dur:200000,prog:16000,playing:false});
         const e=window.diggy.engine;e.cur.clock.seconds=${time};e.cur.clock.beats=${time}*2;
         window.__step(1/60); document.querySelector('#app').classList.add('idle');
       })()`);
@@ -167,8 +173,47 @@ try {
     return {values,error};
   })()`);
   assert.equal(ring.error,0);
-  [Math.round(.7*255)/255,Math.round(.035*255)/255,Math.round(.625*255)/255].forEach((v,i)=>assert.ok(Math.abs(ring.values[i]-v)<.002,JSON.stringify(ring)));
+  [Math.round(Math.fround(.7)*255)/255,Math.round(.035*255)/255,Math.round(.625*255)/255].forEach((v,i)=>assert.ok(Math.abs(ring.values[i]-v)<.002,JSON.stringify(ring)));
   results.push({test:'JS history ring and waveform agree with GLSL after WebGL restore',...ring});
+  const sandbox = await evaluate(`(async()=>{
+    const {jsonp}=await import('./js/tempo-lookup.js');
+    const result=await jsonp(location.origin+'/qa-jsonp');
+    return {...result,remaining:document.querySelectorAll('iframe').length};
+  })()`);
+  assert.equal(sandbox.bpm,128);assert.equal(sandbox.isolated,true);assert.equal(sandbox.remaining,0);
+  results.push({test:'JSONP works but cannot read parent storage',...sandbox});
+
+  // Exercise the production tempo UI with deterministic responses, including stale song results.
+  await evaluate(`window.__srcdoc=Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype,'srcdoc');
+    Object.defineProperty(HTMLIFrameElement.prototype,'srcdoc',{configurable:true,get:window.__srcdoc.get,set(v){window.__srcdoc.set.call(this,v.replaceAll('https://api.deezer.com',location.origin+'/qa-deezer'));}});`);
+  await evaluate(`window.diggy.onTrack({id:'tempo-found',isrc:'USUM71703861',name:'Found',artists:'Fixture',dur:200000,prog:10000,playing:true})`);
+  await waitFor("window.diggy.tempo.bpm===128");
+  assert.equal(await evaluate("document.querySelector('#tap small').textContent"),'AUTO');
+  await evaluate("document.querySelector('#tap').click()");
+  assert.equal(await evaluate("document.querySelector('#tap small').textContent"),'BPM');
+  await evaluate(`window.diggy.onTrack({id:'tempo-missing',name:'missing',artists:'Fixture',dur:200000,prog:10000,playing:true})`);
+  await waitFor("document.querySelector('#tap small').textContent==='SCHAT'");
+  assert.match(await evaluate("document.querySelector('#tempoStatus').textContent"),/Geen tempo/);
+  await evaluate("Object.defineProperty(HTMLIFrameElement.prototype,'srcdoc',window.__srcdoc)");
+  results.push({test:'tempo source, unknown fallback and manual override',passed:true});
+
+  // Real Web Audio pipeline with a local oscillator MediaStream (no microphone/hardware claim).
+  await evaluate(`(async()=>{
+    const ctx=new AudioContext();await ctx.resume();const osc=ctx.createOscillator(),gain=ctx.createGain(),dest=ctx.createMediaStreamDestination();
+    osc.frequency.value=110;gain.gain.value=.08;osc.connect(gain);gain.connect(dest);osc.start();
+    window.__tone={ctx,osc,dest,get:navigator.mediaDevices.getUserMedia};
+    navigator.mediaDevices.getUserMedia=()=>Promise.resolve(dest.stream);
+    await window.diggy.setListen(true);
+  })()`);
+  await new Promise(r=>setTimeout(r,350));
+  for(let i=0;i<15;i++){await evaluate('window.__step(1/60)');await new Promise(r=>setTimeout(r,20));}
+  const mic=await evaluate(`(async()=>{const d=(await import('./js/audio-data.js')).audioData;
+    return {on:window.diggy.listening,live:d.live,range:Math.max(...d.bytes.slice(0,128))-Math.min(...d.bytes.slice(0,128)),level:window.diggy.audio.level};})()`);
+  assert.ok(mic.on&&mic.live&&mic.range>30&&mic.level>0,JSON.stringify(mic));
+  await evaluate(`(async()=>{await window.diggy.setListen(false);window.__step(1/60);window.__tone.osc.stop();await window.__tone.ctx.close();navigator.mediaDevices.getUserMedia=window.__tone.get;})()`);
+  assert.equal(await evaluate('window.diggy.listening'),false);
+  results.push({test:'oscillator MediaStream through actual Web Audio and waveform texture',...mic});
+
   // Every removed visual preference falls back without reviving an old shader.
   for (const removed of ['chrome','moire','glass']) {
     await evaluate(`localStorage.setItem('rv.visual',JSON.stringify('${removed}'));`);
