@@ -38,7 +38,7 @@ void main() {
     float amp = i == 0 ? 0.3 : 0.45 + 0.55 * h;
     float yi = A * w * amp;
     float slope = dFdx(yi) / max(dFdx(p.x), 1e-5);
-    float d = abs(p.y - yi) / sqrt(1.0 + slope * slope);
+    float d = abs(p.y - yi) / sqrt(1.0 + min(slope * slope, 36.0));
     float core = exp(-d / (px * 1.2));
     float glow = exp(-d * 55.0) * 0.07;
     lines += (core * (i == 0 ? 0.9 : 0.45) + glow) * (0.55 + 0.45 * h);

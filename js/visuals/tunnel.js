@@ -21,7 +21,7 @@ void main() {
   // feedback transform
   float frames = clamp(uDelta * 60.0, 0.0, 6.0);
   float zoom = pow(1.0 / (1.018 + uDrop * 0.1), frames);
-  float twist = 0.006 + uSnare * 0.025 + sin(uTime * 0.2) * 0.004;
+  float twist = 0.006 + sin(uTime * 0.2) * 0.004;
   vec2 f = rot(twist * frames) * cuv * zoom;
   f += frames * 0.001 * vec2(sin(f.y * 9.0 + uTime), cos(f.x * 9.0 - uTime * 0.8)) * (0.5 + uEnergy);
   f.x /= aspect;

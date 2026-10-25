@@ -1,7 +1,7 @@
 // Bloop — an original DiggyViz character: a jelly creature that hops to the next neon platform
 // on every beat, collects spinning records and is chased by three pixel critters ("Glitchies").
 // After 90 visible seconds a flying saucer arrives, beams down an alien and the alien chases Bloop,
-// hopping on every beat and slowly closing in. Before the scene ends the saucer beams it back up.
+// hopping on every beat and slowly closing in. The alien stays until the viewer changes visual.
 import { STORY_SHAPES } from "./story-shapes.js";
 
 export default {
@@ -125,7 +125,7 @@ void main() {
   p = p * zoom + vec2(0.0, 0.06 * tall);
   float aa = 1.2 * zoom / min(uRes.x, uRes.y);
   BX = -0.12 + 0.19 * tall;
-  float t = uSceneTime, b = uSceneBeat, c120 = mod(t, 120.0);
+  float t = uSceneTime, b = uSceneBeat;
   float scroll = b * SP;
   float wx = p.x - BX + scroll;                        // world x of this pixel
 
@@ -172,25 +172,21 @@ void main() {
     }
   }
 
-  // The visit: saucer arrives (90-94 s), beams the alien down (94-96 s), the alien chases Bloop on the
-  // beat and closes in (96-115 s), then the saucer returns and beams it up (115-118 s).
-  float alienOn = step(94.0, c120) * (1.0 - step(117.8, c120));
-  float lag = mix(1.25, 0.8, smoothstep(96.0, 114.0, c120));
+  // One arrival per visit. The alien keeps chasing beyond 120 s (Auto off).
+  // Exactly one beat behind: both characters land on the same musical beats.
+  float alienOn = step(94.0, t), lag = 1.0;
   vec2 aw = hopPath(b - lag);
   vec2 chase = vec2(aw.x - scroll + BX, aw.y);
-  vec2 hover = vec2(BX - 1.25 * SP, 0.27);
-  float inA = smoothstep(89.5, 93.5, c120), outA = smoothstep(96.5, 100.0, c120);
-  float inB = smoothstep(114.0, 116.0, c120), outB = smoothstep(117.8, 119.8, c120);
-  vec2 ufoPos = mix(vec2(0.75, 0.7), hover, inA) + vec2(0.9, 0.6) * outA * outA;
-  float ufoOn = step(89.5, c120) * (1.0 - step(100.0, c120));
-  if (c120 >= 114.0) { ufoPos = mix(vec2(-0.8, 0.7), vec2(chase.x, 0.27), inB) + vec2(-0.9, 0.6) * outB * outB; ufoOn = 1.0 - step(119.8, c120); }
-  float down = smoothstep(94.0, 96.0, c120), up = smoothstep(116.0, 117.8, c120);
+  vec2 hover = vec2(BX - lag * SP, 0.27);
+  float arrival = smoothstep(90.0, 94.0, t), departure = smoothstep(97.0, 101.0, t);
+  vec2 ufoPos = mix(vec2(0.75, 0.7), hover, arrival) + vec2(0.9, 0.6) * departure;
+  float ufoOn = step(90.0, t) * (1.0 - step(101.0, t));
+  float down = smoothstep(94.0, 96.0, t);
   vec2 alienPos = mix(ufoPos - vec2(0.0, 0.03), chase, down);
-  alienPos = mix(alienPos, ufoPos - vec2(0.0, 0.03), up);
-  float alienScale = 1.3 * mix(0.35, 1.0, down) * mix(1.0, 0.35, up);
-  float beamOn = (smoothstep(93.6, 94.2, c120) * (1.0 - smoothstep(96.0, 96.6, c120)) + smoothstep(115.6, 116.2, c120) * (1.0 - smoothstep(117.8, 118.4, c120)));
-  col = beam(col, p, ufoPos - vec2(0.0, 0.01), vec2(alienPos.x, alienPos.y), beamOn);
-  float chasing = step(96.0, c120) * (1.0 - step(116.0, c120));
+  float alienScale = 1.3 * mix(0.35, 1.0, down);
+  float beamOn = smoothstep(93.6, 94.2, t) * (1.0 - smoothstep(96.0, 96.6, t));
+  col = beam(col, p, ufoPos - vec2(0.0, 0.01), alienPos, beamOn);
+  float chasing = step(96.0, t);
 
   // Glitchies follow Bloop's path at a distance (they hang back while the alien chases)
   for (int g = 2; g >= 0; g--) {

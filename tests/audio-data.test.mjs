@@ -43,3 +43,12 @@ test('simulated waveform follows loudness: silence is flat, music fills it', () 
   let loud; for (let i = 0; i < 180; i++) loud = synthWave(new Float32Array(32).fill(0.6), 1, 1 / 60);   // loudness is smoothed (~0.4 s)
   assert.ok(Math.max(...loud.map(Math.abs)) > 0.9);
 });
+
+test('changing sound source clears all history and starts with a flat waveform', async () => {
+  const {resetAudioData}=await import('../js/audio-data.js');
+  const d=fresh();d.live=true;d.acc=.02;pushHistory(new Float32Array(32).fill(1),d);
+  resetAudioData(d);
+  assert.ok(d.bytes.slice(WAVE_N).every(v=>v===0));
+  assert.ok(d.bytes.slice(0,WAVE_N).every(v=>v===128));
+  assert.equal(d.head,0);assert.equal(d.acc,0);assert.equal(d.live,false);
+});

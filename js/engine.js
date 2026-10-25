@@ -133,9 +133,9 @@ export class Engine {
     if (!this.cur || gl.isContextLost()) return;
     this.#resize();
     const sceneDt = f.sceneDt ?? f.dt;
-    for (const slot of [this.cur, this.old]) if (slot?.clock) slot.clock.advance(sceneDt, f.bpm);
+    for (const slot of [this.cur, this.old]) if (slot?.clock) slot.clock.advance(sceneDt, f.bpm, f.beatPhase);
     this.#adapt(f.dt, f.time);
-    this.travel += f.dt * (0.35 + f.audio.energy * 0.9 + f.audio.kick * 0.9 + f.drop * 6.0);
+    this.travel += f.dt * 0.8; // steady camera speed; audio only changes local details
     if (this.fade < 1) this.fade = Math.min(1, this.fade + f.dt / this.fadeDur);
     if (this.fade >= 1 && this.old) { this.#freeSlot(this.old); this.old = null; }
 

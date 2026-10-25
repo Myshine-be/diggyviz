@@ -13,6 +13,13 @@ export const audioData = {
   acc: 0,           // time since the last history row
 };
 
+/** Clear history when changing between microphone and simulation: never blend fake and real sound. */
+export function resetAudioData(data = audioData) {
+  data.bytes.fill(0); data.bytes.fill(128, 0, WAVE_N);
+  data.head = 0; data.acc = 0; data.live = false;
+}
+resetAudioData();
+
 /** Store a waveform of -1..1 values (length WAVE_N). */
 export function setWave(w, data = audioData) {
   const b = data.bytes;

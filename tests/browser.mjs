@@ -71,7 +71,7 @@ try {
   ({ sessionId: session } = await send('Target.attachToTarget', { targetId, flatten: true }, null));
   await send('Page.enable'); await send('Runtime.enable'); await send('Log.enable');
   await send('Network.enable');
-  await send('Network.setBlockedURLs', { urls: ['https://fonts.googleapis.com/*', 'https://fonts.gstatic.com/*'] });
+  await send('Network.setBlockedURLs', { urls: ['https://fonts.googleapis.com/*', 'https://fonts.gstatic.com/*', 'https://api.deezer.com/*'] });
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   // Deterministic frames: UI and all production shaders still run unmodified.
   await send('Page.addScriptToEvaluateOnNewDocument', { source: `
@@ -85,11 +85,13 @@ try {
   await evaluate(`window.__time = performance.now(); document.querySelector('[data-pick="demo"]').click(); document.querySelector('#autoBtn').click(); window.__step(1/60);`);
   const ids = await evaluate('window.diggy.engine.visuals.map(v => v.id)');
   assert.equal(ids.length, 13);
+  assert.ok(['chrome','moire','glass'].every(id=>!ids.includes(id)));
+  await evaluate(`(async()=>{const d=await import('./js/audio-data.js');const bands=new Float32Array(32);for(let n=0;n<70;n++){for(let i=0;i<32;i++)bands[i]=.5+.4*Math.sin(n*.2+i*.5);d.pushHistory(bands);}d.setWave(new Float32Array(128).map((_,i)=>Math.sin(i*.2)*.7));})()`);
   for (const id of ids) {
     const result = await evaluate(`(async()=>{
       const e=window.diggy.engine;
       e.setVisual(${JSON.stringify(id)},{instant:true}); window.diggy.setVisual(${JSON.stringify(id)});
-      await window.diggy.onTrack({id:'qa',name:'Visuele test',artists:'DiggyViz',art:'',dur:180000,prog:16000,playing:true});
+      await window.diggy.onTrack({id:'qa',name:'Visuele test',artists:'DiggyViz',art:'',dur:180000,prog:16000,playing:true,bpm:120});
       window.__step(1/60);
       const gl=e.gl, pixels=new Uint8Array(e.W*e.H*4);gl.readPixels(0,0,e.W,e.H,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
       let lit=0;for(let i=0;i<pixels.length;i+=4)if(pixels[i]+pixels[i+1]+pixels[i+2]>30)lit++;
@@ -116,7 +118,7 @@ try {
     })()`);
     assert.ok(result.kept&&result.paused&&result.id===id,JSON.stringify(result));
     results.push({test:id+' story lifecycle',...result});
-    for (const time of [35,89.9,96,106]) {
+    for (const time of [35,89.9,94.5,96,100,106,118,121,180]) {
       await evaluate(`(async()=>{
         await window.diggy.onTrack({id:'frame-${id}',name:'Nachtrit',artists:'DiggyViz',art:'',dur:200000,prog:16000,playing:false});
         const e=window.diggy.engine;e.cur.clock.seconds=${time};e.cur.clock.beats=${time}*2;
@@ -148,6 +150,31 @@ try {
       cv.addEventListener('webglcontextrestored',()=>{window.__step(1/60);resolve(e.currentVisual.id==='soulbeat'&&e.gl.getError()===0);},{once:true}); ext.restoreContext();
     },100),{once:true}); ext.loseContext();})`);
   assert.ok(restored);results.push({test:'context restoration',passed:true});
+  // Verify JS ring writes against actual production GLSL reads after context restoration.
+  const ring = await evaluate(`(async()=>{
+    const {pushHistory,setWave,WAVE_N,HIST_ROWS}=await import('./js/audio-data.js');
+    const d={bytes:new Uint8Array(WAVE_N*(HIST_ROWS+1)),head:0,live:true,acc:0};
+    for(let n=1;n<=70;n++){const b=new Float32Array(32);b[0]=n/100;b[31]=n/200;pushHistory(b,d);}
+    setWave(new Float32Array(128).fill(.25),d);
+    const e=window.diggy.engine;e.visuals.push({id:'qa-audio',name:'QA',frag:'void main(){fragColor=vec4(histAt(0.0,0.0),histAt(1.0,2.1),waveAt(0.5)*.5+.5,1.0);}'});
+    e.setVisual('qa-audio',{instant:true});
+    e.render({time:10,dt:1/60,sceneDt:0,bpm:120,songTime:10,audio:window.diggy.audio,pal:{dark:[0,0,0],mid:[0,255,0],hi:[255,255,255],hot:[255,0,255]},drop:0,seed:1,sound:d});
+    const gl=e.gl;gl.bindFramebuffer(gl.FRAMEBUFFER,e.cur.t[e.cur.i].fb);
+    const pix=e.hdr?new Float32Array(4):new Uint8Array(4);
+    gl.readPixels(0,0,1,1,gl.RGBA,e.hdr?gl.FLOAT:gl.UNSIGNED_BYTE,pix);
+    const values=Array.from(pix).map(v=>e.hdr?v:v/255),error=gl.getError();
+    e.setVisual('nightdrive',{instant:true});e.visuals.pop();
+    return {values,error};
+  })()`);
+  assert.equal(ring.error,0);
+  [Math.round(.7*255)/255,Math.round(.035*255)/255,Math.round(.625*255)/255].forEach((v,i)=>assert.ok(Math.abs(ring.values[i]-v)<.002,JSON.stringify(ring)));
+  results.push({test:'JS history ring and waveform agree with GLSL after WebGL restore',...ring});
+  // Every removed visual preference falls back without reviving an old shader.
+  for (const removed of ['chrome','moire','glass']) {
+    await evaluate(`localStorage.setItem('rv.visual',JSON.stringify('${removed}'));`);
+    await send('Page.reload');await waitFor('!!window.diggy?.engine && window.__frames.length > 0');
+    assert.equal(await evaluate('window.diggy.engine.currentVisual.id'),'nightdrive');
+  }
   // A stale saved visual must still pick a working fallback on reload.
   await evaluate(`localStorage.setItem('rv.visual', JSON.stringify('removed-visual'));`);
   await send('Page.reload'); await waitFor('!!window.diggy?.engine && window.__frames.length > 0');

@@ -16,7 +16,7 @@ export function bandEdges(sampleRate, fftSize, nb = 32, fmin = 30, fmax = 12000)
   return edges;
 }
 
-const avgBins = (spec, a, b) => { let s = 0; for (let i = a; i < b; i++) s += spec[i]; return s / Math.max(1, b - a) / 255; };
+const avgBins = (spec, a, b) => { let s = 0; a = Math.min(spec.length, Math.max(0, a)); b = Math.min(spec.length, Math.max(a, b)); for (let i = a; i < b; i++) s += spec[i]; return s / Math.max(1, b - a) / 255; };
 
 export function makeDetector(sampleRate, fftSize, nb = 32) {
   const hz = sampleRate / fftSize;
@@ -149,14 +149,17 @@ export function createListener({ onStatus = () => {}, onChange = () => {}, media
   const release = (r) => {
     if (!r) return;
     try { r.stream?.getTracks().forEach((t) => t.stop()); } catch {}
-    try { if (r.ctx && r.ctx.state !== "closed") r.ctx.close(); } catch {}
+    try { if (r.ctx && r.ctx.state !== "closed") r.ctx.close()?.catch(() => {}); } catch {}
   };
   const resume = () => { const c = res?.ctx; if (c && c.state !== "running" && c.state !== "closed") c.resume?.().catch(() => {}); };
   doc()?.addEventListener?.("visibilitychange", () => { if (doc().visibilityState === "visible") resume(); });
 
+  doc()?.addEventListener?.("pointerdown", resume, { passive: true });
+
   const L = {
     get supported() { return !!(media()?.getUserMedia && AudioCtx()); },
     get active() { return !!res && res.ctx.state !== "closed"; },
+    get receiving() { return !!res && res.ctx.state === "running" && !res.stream.getAudioTracks()[0]?.muted; },
     get starting() { return !!pending; },
     get bpm() { return res?.st.bpm ?? 120; },
     start() {
@@ -164,7 +167,7 @@ export function createListener({ onStatus = () => {}, onChange = () => {}, media
       if (pending) return pending;
       const my = ++gen;
       let r = null;
-      pending = (async () => {
+      const attempt = (async () => {
         try {
           r = { stream: await media().getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }) };
           if (my !== gen) { release(r); return false; }
@@ -195,11 +198,11 @@ export function createListener({ onStatus = () => {}, onChange = () => {}, media
           release(r);
           if (my === gen) onStatus(e?.name === "NotAllowedError" ? "Geen toegang tot de microfoon. Sta het toe in de instellingen van je browser." : "Luisteren lukt niet op dit toestel.", true);
           return false;
-        } finally {
-          if (my === gen) pending = null;
         }
       })();
-      return pending;
+      pending = attempt;
+      attempt.then(() => { if (my === gen) pending = null; });
+      return attempt;
     },
     stop() {
       const was = !!res; // also true when the context already closed on its own
@@ -211,12 +214,14 @@ export function createListener({ onStatus = () => {}, onChange = () => {}, media
     /** Fill the shared audio object for this frame. */
     analyse(out, dt) {
       if (!L.active) return;
-      res.an.getByteFrequencyData(res.buf);
+      if (L.receiving) res.an.getByteFrequencyData(res.buf);
+      else res.buf.fill(0); // a suspended context can return its last frame indefinitely
       processSpectrum(res.st, res.buf, dt, out);
     },
     /** Fill `out` (-1..1) with the current oscilloscope trace from the microphone. */
     wave(out, dt) {
       if (!L.active) return false;
+      if (!L.receiving) { out.fill(0); return true; }
       res.an.getFloatTimeDomainData(res.tbuf);
       waveFrom(res.tbuf, out, res.gain, dt);
       return true;

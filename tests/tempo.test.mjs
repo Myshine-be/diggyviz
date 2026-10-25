@@ -46,3 +46,17 @@ test('two lookups for the same song share one request', async () => {
   const [a, b] = await Promise.all([L.lookup({ id: 'd', isrc: 'NLA501234567' }), L.lookup({ id: 'd', isrc: 'NLA501234567' })]);
   assert.equal(a, 120); assert.equal(b, 120); assert.equal(f.calls.length, 1);
 });
+
+test('API errors are retryable and distinguishable from a genuinely unknown song', async () => {
+  const s = memStore(); let calls = 0;
+  const L = createTempoLookup({store:s,fetchJsonp:async()=>{calls++;return {error:{code:4,message:'quota'}};}});
+  const t={id:'quota',name:'Song',artists:'Artist'};
+  await L.lookup(t); assert.equal(L.state(t.id),'unavailable'); assert.equal(s.get('bpm.quota'),undefined);
+  await L.lookup(t); assert.equal(calls,2);
+});
+test('invalid cached tempo is ignored', async () => {
+  const s=memStore();s.set('bpm.bad',{bpm:9999,at:Date.now()});
+  const L=createTempoLookup({store:s,fetchJsonp:async()=>({data:[]})});
+  assert.equal(L.cached('bad'),0);assert.equal(await L.lookup({id:'bad',name:'a',artists:'b'}),0);
+  assert.equal(L.state('bad'),'missing');
+});

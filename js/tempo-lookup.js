@@ -32,10 +32,17 @@ export function jsonp(url, ms = 8000) {
 }
 
 export function createTempoLookup({ store, fetchJsonp = jsonp, now = () => Date.now() }) {
-  const inflight = new Map();
+  const inflight = new Map(), states = new Map();
   async function find(t) {
     let failed = false;
-    const get = (url) => fetchJsonp(url).catch(() => { failed = true; return null; });
+    const get = async (url) => {
+      try {
+        const result = await fetchJsonp(url);
+        // API errors (rate limits, service failures) are not a valid "unknown song" result.
+        if (result?.error) { failed = true; return null; }
+        return result;
+      } catch { failed = true; return null; }
+    };
     if (t.isrc && /^[A-Z0-9]{12}$/i.test(t.isrc)) {
       const j = await get(`${API}/track/isrc:${encodeURIComponent(t.isrc.toUpperCase())}`);
       const b = bpmFromTrack(j);
@@ -51,16 +58,23 @@ export function createTempoLookup({ store, fetchJsonp = jsonp, now = () => Date.
     return { bpm, failed };
   }
   return {
+    state(id) { return states.get(id) || "idle"; },
     /** Cached BPM for a song id, or 0. */
-    cached(id) { const c = store.get("bpm." + id); return c && c.bpm > 0 ? c.bpm : 0; },
+    cached(id) { const c = store.get("bpm." + id); return c && Number.isFinite(c.bpm) && c.bpm >= 50 && c.bpm <= 220 ? c.bpm : 0; },
     /** Look up a song's BPM ({ id, isrc?, name, artists }). Resolves 0 when unknown. */
     lookup(t) {
       if (!t?.id) return Promise.resolve(0);
       const c = store.get("bpm." + t.id);
-      if (c && (c.bpm > 0 || now() - (c.at || 0) < WEEK)) return Promise.resolve(c.bpm || 0);
+      const valid = c && Number.isFinite(c.bpm) && c.bpm >= 50 && c.bpm <= 220;
+      if (valid || (c?.bpm === 0 && now() - (c.at || 0) < WEEK)) {
+        states.set(t.id, valid ? "found" : "missing");
+        return Promise.resolve(valid ? c.bpm : 0);
+      }
       if (inflight.has(t.id)) return inflight.get(t.id);
+      states.set(t.id, "loading");
       const p = find(t).catch(() => ({ bpm: 0, failed: true })).then(({ bpm, failed }) => {
         inflight.delete(t.id);
+        states.set(t.id, bpm > 0 ? "found" : failed ? "unavailable" : "missing");
         if (bpm > 0 || !failed) store.set("bpm." + t.id, { bpm, at: now() });   // a network error is not cached
         return bpm;
       });
