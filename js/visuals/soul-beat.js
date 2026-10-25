@@ -25,7 +25,7 @@ float blobSDF(vec2 q, out float ang) {
   float sp = pow(abs(sin(ang * 13.0 + uSongTime * 0.4)), 18.0);
   float sp2 = pow(abs(sin(ang * 21.0 - uSongTime * 0.3)), 30.0);
   float amp = 0.006 + uKick * 0.035 + uDrop * 0.05 + band(0.6) * 0.012;
-  d -= (sp + sp2 * 0.6) * amp * smoothstep(0.03, -0.01, d);
+  d -= (sp + sp2 * 0.6) * amp * (1.0 - smoothstep(-0.01, 0.03, d));
   // fuzzy edge
   d += (noise2(q * 90.0 + uTime * 0.6) - 0.5) * 0.006;
   return d;
@@ -50,7 +50,7 @@ void main() {
   vec3 light = mix(vec3(1.25, 1.25, 1.18), vec3(1.02, 1.03, 0.94), smoothstep(0.0, R, r));
   light += 0.025 * sin(r * 160.0 - uTime * 0.5);
   float floorY = -0.22;
-  light = mix(light, vec3(1.0), smoothstep(floorY + 0.004, floorY - 0.004, q.y) * 0.45);
+  light = mix(light, vec3(1.0), (1.0 - smoothstep(floorY - 0.004, floorY + 0.004, q.y)) * 0.45);
   light = mix(light, light * (0.92 + 0.12 * uPal[2]), 0.35);
 
   // blob

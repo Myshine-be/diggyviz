@@ -1,0 +1,27 @@
+name: DiggyViz regression and browser tests
+on:
+  pull_request:
+    branches: [v2, main]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: JavaScript syntax
+        run: |
+          while IFS= read -r file; do node --check "$file"; done < <(find js -name '*.js')
+      - name: Regression tests
+        run: node --test tests/regression.test.mjs
+      - name: Eight visuals and renderer lifecycle
+        run: node tests/browser.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-test-results
+          path: test-results/

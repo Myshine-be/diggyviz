@@ -6,6 +6,7 @@ precision highp float;
 precision highp int;
 
 uniform vec2  uRes;        // render size in pixels
+uniform float uDelta;      // elapsed seconds, for feedback independent of refresh rate
 uniform float uTime;       // seconds, always running
 uniform float uSongTime;   // song position in seconds
 uniform float uBeat;       // beat phase 0..1 (0 = on the beat)

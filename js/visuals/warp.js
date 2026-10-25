@@ -17,7 +17,7 @@ vec3 layer(vec2 uv, vec2 dir, float streak, float seed) {
     float d = length(vec2(vr / (1.0 + streak), vt));
     float size = 0.008 + h.x * 0.018;
     float star = size / max(d, 1e-3);
-    star = min(star * star, 2.5) * smoothstep(0.5, 0.0, d);
+    star = min(star * star, 2.5) * (1.0 - smoothstep(0.0, 0.5, d));
     vec3 tint = mix(vec3(1.0), mix(uPal[1], uPal[2], h.y), 0.5 + 0.5 * h.x);
     col += tint * star * step(0.55, hash12(id + o + seed * 3.1));
   }
@@ -41,7 +41,7 @@ void main() {
   for (float i = 0.0; i < LAYERS; i++) {
     float depth = fract(i / LAYERS + uTravel * 0.12);
     float scale = mix(20.0, 2.2, depth);
-    float fade = depth * smoothstep(1.0, 0.85, depth);
+    float fade = depth * (1.0 - smoothstep(0.85, 1.0, depth));
     col += layer(p * scale + i * 37.3, dir, streak * depth, i * 17.0) * fade;
   }
   fragColor = vec4(col, 1.0);

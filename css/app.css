@@ -128,3 +128,5 @@ summary { cursor: pointer; color: var(--ink-2); font-size: 14px; }
 .foot { margin: 0; font: 11px var(--f-mono); color: var(--ink-3); text-align: center; }
 
 @media (prefers-reduced-motion: reduce) { .hud, .caption { transition: none; } }
+
+button:disabled { opacity: 0.45; cursor: not-allowed; }

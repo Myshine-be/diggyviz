@@ -4,28 +4,48 @@
 import { HEADER, VERT, MIX_FRAG, BRIGHT_FRAG, BLUR_FRAG, FINAL_FRAG } from "./glsl.js";
 
 export class Engine {
-  constructor(canvas, visuals, { onError } = {}) {
+  constructor(canvas, visuals, { onError, fadeDuration = 1.6 } = {}) {
     this.canvas = canvas;
     this.visuals = visuals;
     this.onError = onError || ((m) => console.error(m));
     const gl = canvas.getContext("webgl2", { antialias: false, alpha: false, depth: false, stencil: false, premultipliedAlpha: false, powerPreference: "high-performance" });
     if (!gl) throw new Error("WebGL2 wordt niet ondersteund door deze browser.");
     this.gl = gl;
+    this.scale = 0.62;
+    this.maxScale = 0.85;
+    this.fadeDur = fadeDuration;
+    this.travel = 0;
+    this.frameMs = 16; this.lastAdapt = 0;
+    this.art = null;
+    this.#initResources();
+    canvas.addEventListener("webglcontextlost", (e) => {
+      e.preventDefault();
+      this.onError("De beeldweergave wordt hersteld…");
+    });
+    canvas.addEventListener("webglcontextrestored", () => {
+      const id = this.cur?.vis.id || this.visuals[0].id;
+      try {
+        this.#initResources();
+        if (this.art) this.setArt(this.art.img, this.art.pal);
+        this.setVisual(id, { instant: true });
+        this.onError("");
+      } catch (e) { this.onError("Herstellen mislukt. Herlaad de pagina: " + e.message); }
+    });
+  }
+
+  #initResources() {
+    const gl = this.gl;
     this.hdr = !!gl.getExtension("EXT_color_buffer_float") || !!gl.getExtension("EXT_color_buffer_half_float");
-    gl.getExtension("KHR_parallel_shader_compile");
     this.vao = gl.createVertexArray();
-    this.programs = new Map();      // visual id → { prog, loc } | null when broken
+    this.programs = new Map();
     this.post = {
       mix: this.#program(MIX_FRAG, "mix"),
       bright: this.#program(BRIGHT_FRAG, "bright"),
       blur: this.#program(BLUR_FRAG, "blur"),
       final: this.#program(FINAL_FRAG, "final"),
     };
-    this.scale = 0.62;               // render scale vs canvas pixels (adaptive)
-    this.maxScale = 0.85;
-    this.cur = null; this.old = null; this.fade = 1; this.fadeDur = 1.6;
-    this.travel = 0;
-    this.frameMs = 16; this.lastAdapt = 0;
+    this.cur = null; this.old = null; this.fade = 1;
+    this.mixT = this.bloomA = this.bloomB = null;
     this.artTex = this.#texture(2, 2);
     this.W = 0; this.H = 0;
     this.#resize();
@@ -35,12 +55,24 @@ export class Engine {
 
   /** Switch to a visual; crossfades from the current one. */
   setVisual(id, { instant = false } = {}) {
+    if (this.gl.isContextLost()) return this.cur?.vis;
     const vis = this.visuals.find((v) => v.id === id) || this.visuals[0];
     if (this.cur && this.cur.vis.id === vis.id) return vis;
     if (!this.#ensure(vis)) return this.cur?.vis;
     const slot = { vis, t: [this.#target(this.RW, this.RH), this.#target(this.RW, this.RH)], i: 0 };
+    let previous = this.cur;
+    if (!instant && this.old && this.fade < 1) {
+      // Rapid swipes continue from the actual composite on screen, not the
+      // partly hidden target of the interrupted transition.
+      const snapshot = this.#target(this.RW, this.RH);
+      this.#copy(this.mixT, snapshot);
+      const ease = this.fade * this.fade * (3 - 2 * this.fade);
+      const bloom = (this.cur.vis.bloom ?? 0.9) * ease + (this.old.vis.bloom ?? 0.9) * (1 - ease);
+      previous = { vis: { ...this.cur.vis, bloom }, t: [snapshot], i: 0, frozen: true };
+      this.#freeSlot(this.cur);
+    }
     if (this.old) this.#freeSlot(this.old);
-    this.old = instant ? null : this.cur;
+    this.old = instant ? null : previous;
     if (instant && this.cur) this.#freeSlot(this.cur);
     this.cur = slot;
     this.fade = this.old ? 0 : 1;
@@ -50,12 +82,14 @@ export class Engine {
   /** Compile remaining visuals a few at a time so the first frame is not blocked. */
   warmUp() {
     const todo = this.visuals.filter((v) => !this.programs.has(v.id));
-    const step = () => { const v = todo.shift(); if (!v) return; this.#ensure(v); setTimeout(step, 60); };
+    const step = () => { if (this.gl.isContextLost()) return; const v = todo.shift(); if (!v) return; this.#ensure(v); setTimeout(step, 60); };
     setTimeout(step, 400);
   }
 
   setArt(img, pal) {
+    this.art = { img, pal };
     const gl = this.gl;
+    if (gl.isContextLost()) return;
     gl.bindTexture(gl.TEXTURE_2D, this.artTex);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     try {
@@ -121,6 +155,7 @@ export class Engine {
   // ---------- internals ----------
 
   #drawVisual(slot, f) {
+    if (slot.frozen) return slot.t[0].tex;
     const p = this.programs.get(slot.vis.id);
     const src = slot.t[slot.i], dst = slot.t[1 - slot.i];
     if (!p) return src.tex;
@@ -131,7 +166,7 @@ export class Engine {
     const A = f.audio, pal = f.pal;
     const set1 = (n, v) => { if (L[n]) gl.uniform1f(L[n], v); };
     if (L.uRes) gl.uniform2f(L.uRes, dst.w, dst.h);
-    set1("uTime", f.time); set1("uSongTime", f.songTime); set1("uBeat", A.beat);
+    set1("uDelta", f.dt); set1("uTime", f.time); set1("uSongTime", f.songTime); set1("uBeat", A.beat);
     set1("uKick", A.kick); set1("uSnare", A.snare); set1("uHat", A.hat); set1("uEnergy", A.energy); set1("uLevel", A.level);
     set1("uDrop", f.drop); set1("uTravel", this.travel); set1("uSeed", f.seed);
     if (L.uBands) gl.uniform1fv(L.uBands, A.bands);
@@ -178,10 +213,15 @@ export class Engine {
       return s;
     };
     const prog = gl.createProgram();
-    gl.attachShader(prog, sh(gl.VERTEX_SHADER, VERT));
-    gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, frag));
-    gl.linkProgram(prog);
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(`[${label}] ${gl.getProgramInfoLog(prog)}`);
+    const shaders = [];
+    try {
+      shaders.push(sh(gl.VERTEX_SHADER, VERT));
+      shaders.push(sh(gl.FRAGMENT_SHADER, frag));
+      shaders.forEach((shader) => gl.attachShader(prog, shader));
+      gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(`[${label}] ${gl.getProgramInfoLog(prog)}`);
+    } catch (e) { gl.deleteProgram(prog); throw e; }
+    finally { shaders.forEach((shader) => gl.deleteShader(shader)); }
     const loc = {};
     const n = gl.getProgramParameter(prog, gl.ACTIVE_UNIFORMS);
     for (let i = 0; i < n; i++) { const info = gl.getActiveUniform(prog, i); const name = info.name.replace(/\[0\]$/, ""); loc[name] = gl.getUniformLocation(prog, info.name); }
@@ -214,6 +254,13 @@ export class Engine {
     return { tex, fb, w, h };
   }
 
+  #copy(src, dst) {
+    const gl = this.gl;
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, src.fb);
+    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, dst.fb);
+    gl.blitFramebuffer(0, 0, src.w, src.h, 0, 0, dst.w, dst.h, gl.COLOR_BUFFER_BIT, gl.LINEAR);
+  }
+
   #free(t) { if (!t) return; this.gl.deleteFramebuffer(t.fb); this.gl.deleteTexture(t.tex); }
   #freeSlot(s) { s.t.forEach((t) => this.#free(t)); }
 
@@ -230,7 +277,12 @@ export class Engine {
     this.mixT = this.#target(RW, RH);
     this.bloomA = this.#target(this.BW, this.BH);
     this.bloomB = this.#target(this.BW, this.BH);
-    for (const s of [this.cur, this.old]) if (s) { this.#freeSlot(s); s.t = [this.#target(RW, RH), this.#target(RW, RH)]; s.i = 0; }
+    for (const s of [this.cur, this.old]) if (s) {
+      const previous = s.t[s.i];
+      const targets = s.frozen ? [this.#target(RW, RH)] : [this.#target(RW, RH), this.#target(RW, RH)];
+      targets.forEach((target) => this.#copy(previous, target));
+      this.#freeSlot(s); s.t = targets; s.i = 0;
+    }
   }
 
   #adapt(dt, time) {
