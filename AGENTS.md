@@ -61,6 +61,8 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
   a Spotify **Client secret** must never be used (PKCE flow only).
 - Do not break the iOS bridge in `index.html` (`state=ios.*` → `retroviz://callback`).
 - Do not change the localStorage keys (`rv.*`); users would lose their login.
+- Do not use existing characters, mascots, logos or brand figures (Pac-Man, Crash Bandicoot, Mario, Sonic, …),
+  not even renamed or mixed — the site is public. Invent original characters (see `bloop.js`).
 - Spotify's audio-features / audio-analysis endpoints are closed for new apps — don't build on them.
 
 ## Testing before you commit
