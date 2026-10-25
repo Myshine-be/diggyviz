@@ -76,12 +76,13 @@ try {
   // Deterministic frames: UI and all production shaders still run unmodified.
   await send('Page.addScriptToEvaluateOnNewDocument', { source: `
     window.__frames = []; window.__time = performance.now();
+    window.setInterval = () => 0; // Keep the demo fixture stable between screenshots.
     window.requestAnimationFrame = cb => { window.__frames.push(cb); return window.__frames.length; };
     window.__step = dt => { window.__time += dt * 1000; const q = window.__frames; window.__frames = []; q.forEach(cb => cb(window.__time)); };
   ` });
   await send('Page.navigate', { url });
   await waitFor('!!window.diggy?.engine && window.__frames.length > 0');
-  await evaluate(`document.querySelector('[data-pick="demo"]').click(); document.querySelector('#autoBtn').click(); window.__step(1/60);`);
+  await evaluate(`window.__time = performance.now(); document.querySelector('[data-pick="demo"]').click(); document.querySelector('#autoBtn').click(); window.__step(1/60);`);
   const ids = await evaluate('window.diggy.engine.visuals.map(v => v.id)');
   assert.equal(ids.length, 8);
   for (const id of ids) {
@@ -95,7 +96,7 @@ try {
       return {id:e.currentVisual.id,compiled:!!e.programs.get(${JSON.stringify(id)}),glError:gl.getError(),litPixels:lit};
     })()`);
     assert.ok(result.compiled && result.glError === 0 && result.litPixels > 100, JSON.stringify(result));
-    results.push(result); await screenshot(id);
+    results.push(result); await new Promise(r => setTimeout(r, 300)); await screenshot(id);
   }
   const rapid = await evaluate(`(()=>{const e=window.diggy.engine;
     window.diggy.setVisual('glass'); window.__step(1/60); window.diggy.setVisual('soulbeat'); window.__step(1/60);
@@ -114,7 +115,7 @@ try {
   // A stale saved visual must still pick a working fallback on reload.
   await evaluate(`localStorage.setItem('rv.visual', JSON.stringify('removed-visual'));`);
   await send('Page.reload'); await waitFor('!!window.diggy?.engine && window.__frames.length > 0');
-  await evaluate('window.__step(1/60)');
+  await evaluate('window.__time = performance.now(); window.__step(1/60)');
   assert.equal(await evaluate('window.diggy.engine.currentVisual.id'), 'urchin');
   assert.equal(await evaluate(`document.querySelector('[data-pick="lastfm"]').disabled`), true);
   results.push({test:'saved visual fallback and unavailable Last.fm',passed:true});

@@ -4,7 +4,7 @@
 export default {
   id: "urchin",
   name: "Urchin",
-  bloom: 0.75,
+  bloom: 0.55,
   frag: /* glsl */ `
 const float PHI = 1.61803398875;
 const float NSPIKES = 420.0;
@@ -61,7 +61,9 @@ float spikeLen(vec3 q, float id) {
   float b = band(1.0 - lat);
   float jitter = 0.8 + 0.4 * hash13(vec3(id, 1.7, 3.1));
   float e = max(uEnergy, 0.12);
-  return (0.10 + e * (0.18 + 0.75 * b * f) + uKick * 0.22 * f + uDrop * 0.4 * f) * jitter;
+  float raw = (0.10 + e * (0.18 + 0.75 * b * f) + uKick * 0.22 * f + uDrop * 0.4 * f) * jitter;
+  // Smooth saturation keeps every tip inside the bounding sphere, even on a track change.
+  return 0.08 + 0.78 * (1.0 - exp(-raw));
 }
 
 float map(vec3 p) {
@@ -69,7 +71,7 @@ float map(vec3 p) {
   vec3 n = p / max(r, 1e-4);
   vec4 s = sfNearest(n, NSPIKES);
   float L = spikeLen(s.xyz, s.w);
-  float dSpike = sdRoundCone(p, s.xyz * R * 0.9, s.xyz * (R + L), 0.05, 0.0035);
+  float dSpike = sdRoundCone(p, s.xyz * R * 0.9, s.xyz * (R + L), 0.035, 0.0035);
   float dCore = r - R;
   gTip = clamp((dot(p, s.xyz) - R) / L, 0.0, 1.0);
   return smin(dCore, dSpike, 0.035);
@@ -83,7 +85,7 @@ vec3 calcNormal(vec3 p) {
 void main() {
   vec2 p = P();
   R = 0.46 + uKick * 0.03 + uDrop * 0.05;
-  vec3 ro = vec3(0.0, 0.0, 3.1);
+  vec3 ro = vec3(0.0, 0.0, 4.5);
   vec3 rd = normalize(vec3(p, -1.35));
   mat3 o = orient();
   ro = o * ro; rd = o * rd;
@@ -102,7 +104,7 @@ void main() {
     for (i = 0; i < 110; i++) {
       vec3 pos = ro + rd * t;
       d = map(pos);
-      glow += exp(-d * 28.0) * (0.15 + 0.85 * gTip) * 0.022;
+      glow += exp(-d * 28.0) * (0.15 + 0.85 * gTip) * 0.012;
       if (d < 0.0008 * t) { hit = true; break; }
       t += d * 0.72;
       if (t > tmax) break;
@@ -118,7 +120,7 @@ void main() {
       float ao = 1.0 - float(i) / 110.0;
       vec3 base = mix(uPal[0] * 0.4 + 0.01, uPal[1] * 0.75, smoothstep(0.0, 0.9, tip));
       col = base * (0.1 + 0.85 * dif) * (0.35 + 0.65 * ao);
-      col += mix(uPal[1], uPal[2], 0.25) * pow(tip, 3.0) * (0.35 + 0.9 * uEnergy + 0.6 * uKick);
+      col += mix(uPal[1], uPal[2], 0.25) * pow(tip, 3.0) * (0.35 + 0.75 * uEnergy + 0.35 * uKick);
       col += uPal[1] * rim * 0.25 * tip;
     }
   }

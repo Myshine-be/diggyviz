@@ -14,7 +14,8 @@ jobs:
         with:
           node-version: 24
       - name: JavaScript syntax
-        run: find js -name '*.js' -exec node --check {} \;
+        run: |
+          while IFS= read -r file; do node --check "$file"; done < <(find js -name '*.js')
       - name: Regression tests
         run: node --test tests/regression.test.mjs
       - name: Eight visuals and renderer lifecycle
