@@ -13,7 +13,7 @@ float grating(float x) {
 }
 
 void main() {
-  vec2 p = P() * (1.0 - uKick * 0.04 - uDrop * 0.08);
+  vec2 p = P() * (1.0 - uDrop * 0.08);
   float t = uSongTime;
   float F = 34.0;
 

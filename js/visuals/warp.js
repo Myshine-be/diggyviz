@@ -28,7 +28,7 @@ void main() {
   vec2 p = P();
   float r = length(p);
   vec2 dir = p / max(r, 1e-4);
-  float speed = 0.35 + uEnergy * 0.9 + uKick * 0.9 + uDrop * 6.0;
+  float speed = 0.35 + uEnergy * 0.9 + uDrop * 6.0;
   float streak = speed * 2.2 * r * 3.0;
 
   vec3 col = uPal[0] * 0.2;

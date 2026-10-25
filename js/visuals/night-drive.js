@@ -24,7 +24,6 @@ vec3 palm(vec3 col,vec2 q,float aa,float phase) {
 vec3 speaker(vec3 col,vec2 q,float aa) {
   if(abs(q.x)>.15||q.y<-.02||q.y>.4)return col;
   q.x-=sin(uSceneBeat*TAU*.5)*.025*q.y;
-  q.y/=1.0+.12*uKick;
   float body=boxMask(q-vec2(0,.15),vec2(.095,.15),.014,aa);
   col=mix(col,uPal[0]*.4,body);
   col+=uPal[3]*boxLine(q-vec2(0,.15),vec2(.095,.15),.014,.003,aa)*.8;

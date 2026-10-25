@@ -60,6 +60,8 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
   these after eye strain; do not reintroduce them.
 - Also no speed surges (`uTravel`), camera jumps or whole-object size pulses on the bass: on screen those read as
   shaking. React with detail inside the shape only (spike length, surface waves).
+  Same for the camera/frame: never scale, squash, zoom or speed up the whole view with uKick/uPunch (removed in 2.1.3
+  from Night Drive, Moiré, Warp and Tunnel). uDrop (once per track change) is fine.
 - Keep raymarched shapes inside their bounding sphere (see `urchin.js`).
 - Listening mode needs HTTPS and a user tap (browser rule). Never record, store or send microphone audio.
 
