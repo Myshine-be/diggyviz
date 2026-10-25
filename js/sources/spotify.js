@@ -112,7 +112,7 @@ export function createSpotifySource({ onTrack, onStatus }) {
           onTrack({ id: it.id || it.uri, name: it.name,
             artists: it.artists ? it.artists.map((a) => a.name).join(", ") : (it.show ? it.show.name : ""),
             art: it.album?.images?.[0]?.url || it.images?.[0]?.url || "",
-            dur: it.duration_ms, prog: j.progress_ms || 0, playing: !!j.is_playing });
+            dur: it.duration_ms, prog: j.progress_ms || 0, playing: !!j.is_playing, isrc: it.external_ids?.isrc || "" });
         }
       }
     },

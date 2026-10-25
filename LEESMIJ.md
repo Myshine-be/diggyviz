@@ -18,10 +18,22 @@ Live op **https://myshine-be.github.io/diggyviz/**
 | Warp | Sterrenveld met hyperspace-sprong bij elk nieuw nummer |
 | Tunnel | Milkdrop-achtige feedbacktunnel |
 | Spectrum | LED-spectrum op een spiegelvloer |
+| Strings | Bundel gloeiende lijnen die rustig meegolven met de muziek (in de stijl van de PSP) |
+| Bubbles | Zwerm zachte onderwaterbelletjes die in een draaiende ring zweven (in de stijl van de PSP) |
+| Landscape | Berglandschap van spectrumlijnen dat op de maat naar achter rolt |
+| Halo | Schuine ring van spectrumcirkels; elke halve beat groeit er een nieuwe uit het midden |
+| Vanish | Bundel lijnen naar één verdwijnpunt; de pieken van elke beat reizen ernaartoe |
+| Orbit | Draaiende bol van lijnen die op de beat rimpelt |
 
 Swipe links/rechts om te wisselen, tik op het beeld om de knoppen te verbergen. Met *Auto* wisselt hij elke 45 s en bij elk nieuw nummer.
 
-Goed om te weten: Spotify geeft geen geluid door aan andere apps. De visuals nemen de kleuren van de albumhoes over en bewegen op een ritme dat aan de positie in het nummer vastzit. Tik 3 keer of meer op de BPM-knop mee op de beat, dan onthoudt hij het tempo voor dat nummer.
+Goed om te weten: Spotify geeft geen geluid of beat-informatie door aan andere apps (de BPM-functies van de Spotify-API zijn dicht voor nieuwe apps). De visuals nemen de kleuren van de albumhoes over en bewegen op een ritme dat aan de positie in het nummer vastzit:
+
+- **Tempo automatisch:** per nummer zoekt DiggyViz het tempo op bij Deezer (via de ISRC-code van Spotify, of artiest + titel bij Last.fm). De BPM-knop toont dan **AUTO**. Niet elk nummer staat erin; dan blijft het 120.
+- **Timing:** tik **1×** op de BPM-knop precies op de beat, dan valt elke beat juist. **3× of meer** tikken zet ook het tempo zelf. Beide worden per nummer onthouden.
+- **🎤 Luister:** de microfoon hoort de echte beat in de kamer en zet tempo en timing vanzelf (na ±10 seconden). Het geluid blijft op je toestel. Werkt het best met muziek uit een box of tv.
+
+Er flitst of schudt niets op de beat: alleen de vormen bewegen mee.
 
 ---
 

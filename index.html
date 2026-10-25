@@ -54,6 +54,7 @@
     <div class="controls">
       <button class="ctl tap" id="tap" aria-label="Tik mee op de beat">120 <small>BPM</small></button>
       <button class="ctl" id="autoBtn" aria-pressed="true">Auto</button>
+      <button class="ctl" id="listenBtn" aria-pressed="false" aria-label="Luistermodus: de microfoon hoort de echte beat">🎤 Luister</button>
       <button class="ctl" id="fsBtn">Volledig scherm</button>
     </div>
   </footer>
@@ -118,9 +119,13 @@
     <section>
       <h3>Visuals</h3>
       <label class="switch"><input type="checkbox" id="autoChk" checked> Automatisch wisselen (45 s; verhaalwerelden 2 minuten)</label>
-      <p class="note">Het ritme is gesimuleerd: Spotify en Last.fm leveren hier geen geluidsanalyse. Bij Last.fm is ook de afspeelpositie geschat.</p>
+      <div id="listenRow">
+        <label class="switch"><input type="checkbox" id="listenChk"> Luistermodus (microfoon): volg de échte beat</label>
+        <p class="note">De microfoon hoort de muziek in de kamer en herkent zelf de beat en het tempo. Het geluid blijft op je toestel: niets wordt opgenomen of verstuurd. Werkt het best als de muziek uit een box of tv komt.</p>
+      </div>
+      <p class="note">Zonder luistermodus volgt het ritme de positie in het nummer. Het tempo wordt per nummer automatisch opgezocht (BPM-knop toont dan AUTO); tik 1× op de beat om de timing exact te zetten, of 3× of meer om zelf het tempo te tikken. Spotify en Last.fm leveren zelf geen geluidsanalyse. Bij Last.fm is de afspeelpositie geschat.</p>
       <p class="note">Night Drive en Bloop hebben na 90 seconden kijken een verrassing. Hun verhaal loopt door bij een nieuw nummer; pauze en achtergrondtijd tellen niet mee.</p>
-      <p class="note">Swipe links of rechts over het beeld om te wisselen. Tik op het beeld om de knoppen te verbergen. Tik minstens 3 keer op BPM, mee op de beat, om het ritme per nummer vast te leggen.</p>
+      <p class="note">Swipe links of rechts over het beeld om te wisselen. Tik op het beeld om de knoppen te verbergen. Tik op BPM mee op de beat: 1× zet de timing, 3× of meer zet ook het tempo, per nummer onthouden.</p>
     </section>
 
     <p class="foot" id="version"></p>

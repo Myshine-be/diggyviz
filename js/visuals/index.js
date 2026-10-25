@@ -7,8 +7,14 @@ import tunnel from "./tunnel.js";
 import chrome from "./chrome.js";
 import moire from "./moire.js";
 import warp from "./warp.js";
+import strings from "./strings.js";
+import bubbles from "./bubbles.js";
+import landscape from "./landscape.js";
+import halo from "./halo.js";
+import vanish from "./vanish.js";
+import orbit from "./orbit.js";
 
 import nightdrive from "./night-drive.js";
 import bloop from "./bloop.js";
 
-export const VISUALS = [nightdrive, bloop, urchin, glass, soulbeat, chrome, moire, warp, tunnel, spectrum];
+export const VISUALS = [nightdrive, bloop, urchin, glass, soulbeat, chrome, moire, warp, tunnel, spectrum, strings, bubbles, landscape, halo, vanish, orbit];

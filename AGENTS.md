@@ -18,6 +18,9 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
 | `js/engine.js` | WebGL2 renderer: visual → crossfade → bloom → tonemap/grain. Adaptive resolution |
 | `js/glsl.js` | Shared GLSL header (uniforms + helpers) and post-processing shaders |
 | `js/rhythm.js` | Synthetic rhythm (no audio access): kick/snare/hat/energy + 32 bands from song position + BPM |
+| `js/tempo-lookup.js` | Automatic BPM per song from Deezer (JSONP; Spotify ISRC, else artist + title). Cached in `rv.bpm.<id>` |
+| `js/listen.js` | Listening mode: microphone → Web Audio → same `audio` fields as rhythm.js (real kicks, tempo). Never records |
+| `js/visuals/spectrum-history.js` | Shared GLSL for line visuals: `beatNow()`, `specAt(f, beat)`, `lineCol()`, `lineAt()`, `ellipseLine()` |
 | `js/palette.js` | Album-art → 4-colour palette |
 | `js/visuals/*.js` | One file per visual. Registry in `js/visuals/index.js` |
 | `js/sources/*.js` | `spotify.js`, `lastfm.js`, `demo.js` — same interface |
@@ -64,7 +67,8 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
 - Do not use existing characters, mascots, logos or brand figures (Pac-Man, Crash Bandicoot, Mario, Sonic, …),
   not even renamed or mixed — the site is public. Invent original characters (see `bloop.js`).
 - No shaking, flashing, strobing, zooming or speed surges of the whole view on the beat (photosensitivity, eye strain).
-  Only small details inside a shape may react to uKick.
+  Only small details inside a shape may react to uKick. No large high-contrast stripe patterns (sunburst rays).
+  Check: render a few seconds per visual and keep frame-to-frame mean luminance changes small (WCAG 2.3.1: < 3 flashes/s).
 - Spotify's audio-features / audio-analysis endpoints are closed for new apps — don't build on them.
 
 ## Testing before you commit
@@ -73,6 +77,10 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
 3. `window.diggy.setVisual("id")` switches visuals from the console; `window.diggy.onTrack({...})`
    fakes a track change.
 4. Work on a branch, open a pull request; Mo merges to `main` (that is what GitHub Pages serves).
+
+## Line visuals (Landscape, Halo, Vanish, Orbit)
+Draw history with `specAt(f, beatNow() - n)` so every line lands on the song's beat (tempo from tap, Deezer or the mic).
+Use `ellipseLine()` for circles/ellipses; `lineAt()` caps the slope so steep curves don't leave vertical streaks.
 
 ## Story visuals
 
