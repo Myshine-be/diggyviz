@@ -32,9 +32,9 @@ vec3 env(vec3 r) {
   vec3 floorC = uPal[0] * 0.12 + 0.01;
   vec3 sky = mix(art * 0.85, vec3(0.06) + uPal[1] * 0.08, smoothstep(0.15, 0.8, r.y));
   vec3 c = mix(floorC, sky, smoothstep(-0.03, 0.03, r.y));
-  c += vec3(1.0) * smoothstep(0.012, 0.0, abs(r.y)) * 0.6;                         // horizon line
-  float box1 = smoothstep(0.12, 0.08, abs(r.y - 0.55)) * smoothstep(0.5, 0.35, abs(az - 0.6));
-  float box2 = smoothstep(0.05, 0.03, abs(r.y - 0.3)) * smoothstep(0.25, 0.15, abs(az + 2.0));
+  c += vec3(1.0) * (1.0 - smoothstep(0.0, 0.012, abs(r.y))) * 0.6;                         // horizon line
+  float box1 = (1.0 - smoothstep(0.08, 0.12, abs(r.y - 0.55))) * (1.0 - smoothstep(0.35, 0.5, abs(az - 0.6)));
+  float box2 = (1.0 - smoothstep(0.03, 0.05, abs(r.y - 0.3))) * (1.0 - smoothstep(0.15, 0.25, abs(az + 2.0)));
   c += vec3(1.0, 0.98, 0.95) * (box1 * 2.2 + box2 * 1.4);
   return c;
 }

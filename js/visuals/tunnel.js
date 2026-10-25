@@ -19,13 +19,14 @@ void main() {
   vec2 cuv = uv - 0.5; cuv.x *= aspect;
 
   // feedback transform
-  float zoom = 1.0 / (1.018 + uKick * 0.05 + uDrop * 0.1);
+  float frames = clamp(uDelta * 60.0, 0.0, 6.0);
+  float zoom = pow(1.0 / (1.018 + uKick * 0.05 + uDrop * 0.1), frames);
   float twist = 0.006 + uSnare * 0.025 + sin(uTime * 0.2) * 0.004;
-  vec2 f = rot(twist) * cuv * zoom;
-  f += 0.001 * vec2(sin(f.y * 9.0 + uTime), cos(f.x * 9.0 - uTime * 0.8)) * (0.5 + uEnergy);
+  vec2 f = rot(twist * frames) * cuv * zoom;
+  f += frames * 0.001 * vec2(sin(f.y * 9.0 + uTime), cos(f.x * 9.0 - uTime * 0.8)) * (0.5 + uEnergy);
   f.x /= aspect;
   vec3 prev = texture(uPrev, f + 0.5).rgb;
-  prev = hueShift(prev, 0.008 + uHat * 0.02) * (0.935 - uDrop * 0.1);
+  prev = max(vec3(0.0), hueShift(prev, (0.008 + uHat * 0.02) * frames)) * pow(0.935 - uDrop * 0.1, frames);
 
   // new ring
   vec2 p = P();

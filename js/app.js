@@ -24,6 +24,7 @@ let source = null, sourceName = store.get("source", null);
 let auto = store.get("auto", true);
 let lastSwitch = performance.now();
 let firstTrack = true;
+let sourceVersion = 0;
 
 function clonePal(p) { return { dark: [...p.dark], mid: [...p.mid], hi: [...p.hi], hot: [...p.hot] }; }
 const position = () => track.playing ? Math.min(track.dur, track.prog + (performance.now() - track.at)) : track.prog;
@@ -31,7 +32,7 @@ const position = () => track.playing ? Math.min(track.dur, track.prog + (perform
 /* ---------------- engine ---------------- */
 let engine = null;
 try {
-  engine = new Engine($("viz"), VISUALS, { onError: (m) => status(m, true) });
+  engine = new Engine($("viz"), VISUALS, { onError: (m) => status(m, true), fadeDuration: CONFIG.CROSSFADE_SECONDS });
 } catch (e) {
   $("fallback").hidden = false;
   $("fallback").textContent = "Deze browser kan de visuals niet tonen (" + e.message + "). Probeer Safari of Chrome.";
@@ -61,10 +62,12 @@ function stepVisual(dir) {
 }
 
 /* ---------------- track handling ---------------- */
-function status(msg, isErr = false) { const s = $("status"); s.textContent = msg || ""; s.classList.toggle("err", !!isErr); }
+function status(msg, isErr = false) { for (const id of ["status", "settingsStatus"]) { const s = $(id); s.textContent = msg || ""; s.classList.toggle("err", !!isErr); } }
 
 function loadTempo(defBpm = 120) {
-  tempo = store.get("tempo." + track.id, { bpm: defBpm, off: 0 });
+  const saved = store.get("tempo." + track.id);
+  tempo = saved && Number.isFinite(saved.bpm) && saved.bpm >= 50 && saved.bpm <= 220 && Number.isFinite(saved.off)
+    ? saved : { bpm: defBpm, off: 0 };
   $("tap").firstChild.nodeValue = Math.round(tempo.bpm) + " ";
 }
 
@@ -73,6 +76,7 @@ async function onTrack(t) {
     track.prog = position(); track.at = performance.now(); track.playing = false;
     return;
   }
+  const version = sourceVersion;
   const changed = t.id !== track.id;
   Object.assign(track, { id: t.id, name: t.name, artists: t.artists, art: t.art, dur: t.dur || 210000, prog: t.prog || 0, playing: !!t.playing, at: performance.now() });
   if (!changed) return;
@@ -84,13 +88,14 @@ async function onTrack(t) {
   loadTempo(t.bpm || 120);
   const isFirst = firstTrack;
   drop = isFirst ? 0 : 1;
+  taps = [];
   if (auto && !isFirst) stepVisual(1);
   firstTrack = false;
 
   if (t.palette) { palTarget = clonePal(t.palette); engine?.setArt(null, t.palette); }
   else {
     const { pal, img } = await paletteFrom(t.art);
-    if (track.id !== t.id) return;
+    if (sourceVersion !== version || track.id !== t.id) return;
     palTarget = clonePal(pal);
     engine?.setArt(img, pal);
   }
@@ -101,13 +106,19 @@ async function onTrack(t) {
 
 /* ---------------- sources ---------------- */
 function useSource(name) {
+  const version = ++sourceVersion;
   source?.stop();
+  onTrack(null);
+  status("");
   sourceName = name; store.set("source", name);
   $("srcBadge").textContent = name === "lastfm" ? "last.fm" : name;
   document.querySelectorAll(".seg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.src === name)));
   document.querySelectorAll("section[data-for]").forEach((s) => { s.hidden = s.dataset.for !== name; });
   track.id = ""; firstTrack = true;
-  const cb = { onTrack, onStatus: status };
+  const cb = {
+    onTrack: (t) => { if (version === sourceVersion) onTrack(t); },
+    onStatus: (m, err) => { if (version === sourceVersion) status(m, err); },
+  };
   if (name === "spotify") {
     if (!spotify.isLoggedIn()) { status("Log in bij Spotify via ⚙"); source = createDemoSource({ onTrack, onStatus: () => {} }); }
     else source = spotify.createSpotifySource(cb);
@@ -122,6 +133,11 @@ function useSource(name) {
   refreshSpotifyState();
 }
 
+async function startLogin() {
+  try { await spotify.login(); }
+  catch (e) { $("settings").hidden = false; status("Inloggen mislukt: " + e.message, true); }
+}
+
 function refreshSpotifyState() {
   const ok = spotify.isLoggedIn();
   $("spState").textContent = ok ? "Ingelogd. DiggyViz volgt wat je op Spotify speelt." : "Niet ingelogd. Je Spotify-account moet door Mo toegevoegd zijn.";
@@ -134,7 +150,7 @@ let last = performance.now(), t0 = last;
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   const pos = position();
-  analyse(pos, track.playing, hashStr(track.id || "x"), tempo.bpm, tempo.off);
+  analyse(pos, track.playing, hashStr(track.id || "x"), tempo.bpm, tempo.off, dt);
   drop = Math.max(0, drop - dt * 0.7);
   const k = 1 - Math.exp(-dt * 2.2);
   for (const key of ["dark", "mid", "hi", "hot"]) for (let i = 0; i < 3; i++) palCur[key][i] += (palTarget[key][i] - palCur[key][i]) * k;
@@ -219,12 +235,12 @@ document.querySelectorAll(".seg button").forEach((b) => b.addEventListener("clic
 document.querySelectorAll(".choice").forEach((b) => b.addEventListener("click", () => {
   $("onboard").hidden = true;
   useSource(b.dataset.pick);
-  if (b.dataset.pick === "spotify" && !spotify.isLoggedIn()) spotify.login();
+  if (b.dataset.pick === "spotify" && !spotify.isLoggedIn()) startLogin();
   else if (b.dataset.pick === "lastfm" && !store.get("lfUser")) { $("settings").hidden = false; $("lfUser").focus(); }
   else wake();
 }));
 
-$("spLogin").addEventListener("click", () => spotify.login());
+$("spLogin").addEventListener("click", startLogin);
 $("spLogout").addEventListener("click", () => { spotify.logout(); useSource("spotify"); status("Uitgelogd bij Spotify."); });
 $("copyCode").addEventListener("click", async () => {
   const code = spotify.pairingCode();
@@ -242,6 +258,11 @@ $("lfGo").addEventListener("click", () => {
   if (!/^[A-Za-z][\w-]{1,14}$/.test(u)) { status("Dat is geen geldige Last.fm-gebruikersnaam.", true); return; }
   store.set("lfUser", u); useSource("lastfm"); $("settings").hidden = true; wake();
 });
+if (!CONFIG.LASTFM_API_KEY) {
+  document.querySelectorAll('[data-pick="lastfm"], [data-src="lastfm"]').forEach((b) => { b.disabled = true; b.title = "Last.fm is nog niet ingesteld"; });
+  document.querySelector('[data-pick="lastfm"] span').textContent = "Nog niet beschikbaar. Last.fm moet eerst worden ingesteld.";
+  $("lfGo").disabled = true;
+}
 $("version").textContent = "DiggyViz " + CONFIG.VERSION;
 
 /* ---------------- boot ---------------- */

@@ -36,7 +36,7 @@ vec3 shell(vec3 n, vec3 rd, mat3 o, float facing) {
   float diag = gridLine((lat * 0.7 + lon * 0.45) * 12.0 / PI + w * 0.2, 0.04) * 0.25;
   float fres = pow(1.0 - abs(dot(n, rd)), 2.6);
   float mesh = (lines + meridians + diag) * (0.25 + 0.75 * smoothstep(-1.0, 1.0, w)) ;
-  vec3 tint = mix(pal(0.5), vec3(0.35, 0.95, 0.85), 0.25);
+  vec3 tint = mix(pal(0.5), uPal[2], 0.25);
   vec3 col = tint * mesh * (0.35 + 0.9 * fres) * facing;
   col += tint * fres * 0.4 * facing;
   vec3 l = normalize(vec3(-0.5, 0.8, 0.6));
