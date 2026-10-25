@@ -53,9 +53,12 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
 - Anti-alias edges with `fwidth` / `px = 1.5 / min(uRes.x, uRes.y)`.
 
 ## Bass impact
-- `uPunch` (bass hit, already scaled by the user's "Explosiviteit" setting, up to ~1.3) and `uBoom` (drop, 1 → 0)
-  drive a global impact layer in `FINAL_FRAG` (zoom-pulse, shake, RGB split, flash, shockwave). Every visual gets it for free.
-- Visuals may react to `uPunch`/`uBoom` too, but keep raymarched shapes inside their bounding sphere (see `urchin.js`).
+- `uPunch` (bass hit, already scaled by the user's "Explosiviteit" setting, up to ~1.3), `uBass` and `uBoom` (drop, 1 → 0)
+  are available to every visual. Let the **shapes** react (size, spikes, waves, speed), not the whole screen.
+- **Photosensitivity rule:** no full-screen shake, flash, strobe, zoom-pulse, colour split or bloom pumping on the beat.
+  Avoid large bright areas that change brightness with the rhythm (WCAG 2.3.1: max 3 flashes per second). Mo removed
+  these after eye strain; do not reintroduce them.
+- Keep raymarched shapes inside their bounding sphere (see `urchin.js`).
 - Listening mode needs HTTPS and a user tap (browser rule). Never record, store or send microphone audio.
 
 ## Source interface

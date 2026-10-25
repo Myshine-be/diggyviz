@@ -130,7 +130,7 @@ export class Engine {
     const sceneDt = f.sceneDt ?? f.dt;
     for (const slot of [this.cur, this.old]) if (slot?.clock) slot.clock.advance(sceneDt, f.bpm);
     this.#adapt(f.dt, f.time);
-    // Impact layer: bass hits scaled by the "Explosiviteit" setting (f.intensity, default 1).
+    // Bass hits for the visuals (uPunch/uBoom), scaled by the "Explosiviteit" setting (f.intensity, default 1).
     const I = Number.isFinite(f.intensity) ? f.intensity : 1;
     this.impact = {
       punch: Math.min(1.3, (f.audio.punch || 0) * I),
@@ -157,14 +157,10 @@ export class Engine {
     this.#pass(this.post.blur, this.bloomA, (u) => { u.tex("uSrc", this.bloomB.tex, 0); u.v2("uDir", 0, 2 / this.BH); });
     // final
     const bloomAmt = (this.cur.vis.bloom ?? 0.9) * ease + (this.old ? (this.old.vis.bloom ?? 0.9) * (1 - ease) : 0);
-    const { punch, boom } = this.impact;
-    // jittery shake that only exists on hard hits (punch²)
-    const sh = punch * punch * 0.008;
+    // No full-screen effects on the beat (no shake, flash, zoom or bloom pumping): only the visuals themselves react.
     this.#pass(this.post.final, null, (u) => {
       u.tex("uScene", this.mixT.tex, 0); u.tex("uBloom", this.bloomA.tex, 1);
-      u.f("uBloomAmt", bloomAmt * (1 + punch * 0.9)); u.f("uTime", f.time); u.f("uGrain", 0.035);
-      u.f("uPunch", punch); u.f("uBoom", boom);
-      u.v2("uShake", Math.sin(f.time * 61.0) * sh, Math.cos(f.time * 47.0) * sh);
+      u.f("uBloomAmt", bloomAmt); u.f("uTime", f.time); u.f("uGrain", 0.035);
     });
   }
 

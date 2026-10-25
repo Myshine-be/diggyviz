@@ -115,32 +115,14 @@ void main() {
 export const FINAL_FRAG = /* glsl */ `#version 300 es
 precision highp float;
 uniform sampler2D uScene, uBloom; uniform vec2 uRes; uniform float uBloomAmt, uTime, uGrain;
-// Impact layer (bass): uPunch = hit 0..~1.3 (already scaled by "Explosiviteit"), uBoom = drop shockwave 1 → 0, uShake = screen offset.
-uniform float uPunch, uBoom; uniform vec2 uShake;
 out vec4 fragColor;
 float h(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
-vec3 S(vec2 p) { return texture(uScene, p).rgb + texture(uBloom, p).rgb * uBloomAmt; }
 void main() {
   vec2 uv = gl_FragCoord.xy / uRes;
-  vec2 q = uv - 0.5;
-  // zoom-pulse towards the centre (zoom in only, so the shake never shows an edge)
-  float z = 1.0 - uPunch * 0.05 - uBoom * 0.05;
-  vec2 suv = 0.5 + q * z + uShake;
-  // shockwave ring from the centre on a drop
-  float asp = uRes.x / uRes.y;
-  vec2 qa = vec2(q.x * asp, q.y);
-  float d = length(qa);
-  float ring = uBoom > 0.0 ? exp(-pow((d - (1.0 - uBoom) * 1.15) * 12.0, 2.0)) * uBoom : 0.0;
-  suv += (qa / max(d, 1e-4)) * vec2(1.0 / asp, 1.0) * ring * 0.035;
-  // RGB split on the hit
-  vec2 ca = q * (uPunch * 0.016 + ring * 0.03);
-  vec3 c = (uPunch + ring > 0.02) ? vec3(S(suv + ca).r, S(suv).g, S(suv - ca).b) : S(suv);
-  // flash: brighter on the hit, a bright rim on the wave
-  c *= 1.0 + uPunch * 0.45;
-  c += (c + 0.15) * ring * 0.9;
+  vec3 c = texture(uScene, uv).rgb + texture(uBloom, uv).rgb * uBloomAmt;
   c = aces(c * 1.05);
-  c *= 1.0 - dot(q, q) * (0.55 + uPunch * 0.35);
+  vec2 q = uv - 0.5; c *= 1.0 - dot(q, q) * 0.55;
   c += (h(gl_FragCoord.xy + fract(uTime * 13.7) * 311.0) - 0.5) * uGrain;
   fragColor = vec4(c, 1.0);
 }`;
