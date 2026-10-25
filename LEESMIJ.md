@@ -11,13 +11,12 @@ Live op **https://myshine-be.github.io/diggyviz/**
 | Naam | Wat |
 |---|---|
 | Urchin | Bol met honderden stekels die per frequentie uitschieten |
-| Glass Orb | Doorzichtige bol met lijnenpatroon waar golven overheen rollen |
 | Soul Beat | Eerbetoon aan de oude Pioneer-visuals: witte maanschijf met ferrofluid-blob |
-| Chrome | Vloeibaar metaal dat je albumhoes weerspiegelt |
-| Moiré | Draaiende rasters die onmogelijke interferentiepatronen tekenen |
 | Warp | Sterrenveld met hyperspace-sprong bij elk nieuw nummer |
 | Tunnel | Milkdrop-achtige feedbacktunnel |
 | Spectrum | LED-spectrum op een spiegelvloer |
+| Night Drive | Rit door een neonstad. Na 90 s kijken rijdt er een konvooi van vier auto's naast je, elk met een eigen visual (Strings, Bubbles, Halo, Orbit) en lichtsporen naar de horizon |
+| Bloop | Bloop springt op de beat over neonplatforms. Na 90 s landt er een UFO, er komt een alien uit en die achtervolgt Bloop op de beat |
 | Strings | Bundel gloeiende lijnen die rustig meegolven met de muziek (in de stijl van de PSP) |
 | Bubbles | Zwerm zachte onderwaterbelletjes die in een draaiende ring zweven (in de stijl van de PSP) |
 | Landscape | Berglandschap van spectrumlijnen dat op de maat naar achter rolt |

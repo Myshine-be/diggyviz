@@ -84,7 +84,7 @@ try {
   await waitFor('!!window.diggy?.engine && window.__frames.length > 0');
   await evaluate(`window.__time = performance.now(); document.querySelector('[data-pick="demo"]').click(); document.querySelector('#autoBtn').click(); window.__step(1/60);`);
   const ids = await evaluate('window.diggy.engine.visuals.map(v => v.id)');
-  assert.equal(ids.length, 16);
+  assert.equal(ids.length, 13);
   for (const id of ids) {
     const result = await evaluate(`(async()=>{
       const e=window.diggy.engine;
@@ -128,7 +128,7 @@ try {
     }
   }
   const rapid = await evaluate(`(()=>{const e=window.diggy.engine;
-    window.diggy.setVisual('glass'); window.__step(1/60); window.diggy.setVisual('soulbeat'); window.__step(1/60);
+    window.diggy.setVisual('urchin'); window.__step(1/60); window.diggy.setVisual('soulbeat'); window.__step(1/60);
     return {snapshot:!!e.old?.frozen,glError:e.gl.getError()};})()`);
   assert.ok(rapid.snapshot && rapid.glError === 0); results.push({test:'rapid crossfade',...rapid});
   await send('Emulation.setDeviceMetricsOverride', { width: 844, height: 390, deviceScaleFactor: 1, mobile: true });

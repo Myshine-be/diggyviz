@@ -1,7 +1,7 @@
 // Bloop — an original DiggyViz character: a jelly creature that hops to the next neon platform
 // on every beat, collects spinning records and is chased by three pixel critters ("Glitchies").
-// After 90 visible seconds the stage turns into a disco: Bloop grows and dances centre stage,
-// the Glitchies orbit and the collected records form a ring under a spinning mirror ball.
+// After 90 visible seconds a flying saucer arrives, beams down an alien and the alien chases Bloop,
+// hopping on every beat and slowly closing in. Before the scene ends the saucer beams it back up.
 import { STORY_SHAPES } from "./story-shapes.js";
 
 export default {
@@ -49,7 +49,7 @@ vec3 glitchy(vec3 col, vec2 q, float id, float s, vec3 tint) {
   return col;
 }
 
-vec3 bloopChar(vec3 col, vec2 q, float land, float scale, float aa) {
+vec3 bloopChar(vec3 col, vec2 q, float land, float scale, float aa, float look) {
   q /= scale; aa /= scale;
   // squash on landing, stretch while rising
   q *= vec2(1.0 - 0.22 * land, 1.0 + 0.25 * land);
@@ -65,7 +65,7 @@ vec3 bloopChar(vec3 col, vec2 q, float land, float scale, float aa) {
   for (int e = 0; e < 2; e++) {
     vec2 eq = (q - vec2(float(e) * 0.026 - 0.006, 0.046)) * vec2(1.0, 1.0 / max(blink, 0.1));
     col = mix(col, vec3(1.0), disk(eq * vec2(1.25, 1.0), 0.011, aa) * m);
-    col = mix(col, vec3(0.03), disk(eq - vec2(0.004, -0.001), 0.0055, aa) * m);
+    col = mix(col, vec3(0.03), disk(eq - vec2(0.004 * look, -0.001), 0.0055, aa) * m);
   }
   col = mix(col, uPal[3] * 0.9, disk((q - vec2(0.03, 0.03)) * vec2(1.0, 1.8), 0.006, aa) * m * 0.7); // cheek
   // antenna with a bulb that flashes on the kick
@@ -77,6 +77,47 @@ vec3 bloopChar(vec3 col, vec2 q, float land, float scale, float aa) {
   return col;
 }
 
+// Original alien: big head, large dark eyes, two antennae, small body and legs. Squashes on landing.
+vec3 alienChar(vec3 col, vec2 q, float land, float scale, float aa) {
+  q /= scale; aa /= scale;
+  if (abs(q.x) > 0.08 || q.y < -0.01 || q.y > 0.16) return col;
+  q *= vec2(1.0 - 0.2 * land, 1.0 + 0.22 * land);
+  vec3 skin = mix(uPal[3], vec3(0.55, 1.0, 0.6), 0.45);
+  float legs = max(strokeSeg(q, vec2(-0.01, 0.022), vec2(-0.016, 0.002), 0.004, aa), strokeSeg(q, vec2(0.01, 0.022), vec2(0.016, 0.002), 0.004, aa));
+  col = mix(col, skin * 0.6, legs);
+  float body = 1.0 - smoothstep(-aa, aa, boxSDF(q - vec2(0.0, 0.034), vec2(0.016, 0.016), 0.012));
+  col = mix(col, skin * 0.8, body);
+  vec2 hq = (q - vec2(0.0, 0.08)) / vec2(0.042, 0.034);
+  hq.y += 0.25 * hq.x * hq.x * step(hq.y, 0.0);                     // narrower chin
+  float head = 1.0 - smoothstep(1.0 - aa * 30.0, 1.0 + aa * 30.0, length(hq));
+  col = mix(col, mix(skin * 0.85, skin * 1.1, smoothstep(-1.0, 1.0, hq.y)), head);
+  col += uPal[2] * (1.0 - smoothstep(0.0, aa * 40.0, abs(length(hq) - 1.0))) * 0.6 * step(0.0, hq.y + 1.2);
+  for (int e = 0; e < 2; e++) {
+    float sx = e == 0 ? -1.0 : 1.0;
+    vec2 eq = rot(sx * 0.45) * (q - vec2(sx * 0.017, 0.078));
+    float eye = disk(eq / vec2(1.0, 0.55), 0.0135, aa);
+    col = mix(col, vec3(0.02), eye * head);
+    col += vec3(1.0) * disk(eq - vec2(-0.004, 0.003), 0.0025, aa) * 0.8 * head;
+  }
+  for (int a = 0; a < 2; a++) {
+    float sx = a == 0 ? -1.0 : 1.0;
+    col = mix(col, skin * 0.7, strokeSeg(q, vec2(sx * 0.012, 0.11), vec2(sx * 0.024, 0.135), 0.0018, aa));
+    col = mix(col, uPal[2], disk(q - vec2(sx * 0.024, 0.137), 0.005, aa));
+  }
+  return col;
+}
+// soft tractor beam from the saucer (top) to the ground (bottom); no flicker
+vec3 beam(vec3 col, vec2 p, vec2 top, vec2 bottom, float on) {
+  if (on <= 0.0) return col;
+  float span = top.y - bottom.y;
+  float u = clamp((top.y - p.y) / max(span, 1e-3), 0.0, 1.0);
+  float x = p.x - mix(top.x, bottom.x, u);
+  float w = 0.025 + u * 0.05;
+  float m = (1.0 - smoothstep(w * 0.7, w, abs(x))) * step(p.y, top.y) * step(bottom.y - 0.02, p.y);
+  float rings = 0.85 + 0.15 * sin((p.y - uTime * 0.15) * 70.0);
+  return col + uPal[2] * m * on * 0.22 * rings;
+}
+
 void main() {
   vec2 p = P();
   float tall = clamp(uRes.y / uRes.x - 1.0, 0.0, 1.3);
@@ -84,7 +125,7 @@ void main() {
   p = p * zoom + vec2(0.0, 0.06 * tall);
   float aa = 1.2 * zoom / min(uRes.x, uRes.y);
   BX = -0.12 + 0.19 * tall;
-  float t = uSceneTime, b = uSceneBeat, egg = surprise(t);
+  float t = uSceneTime, b = uSceneBeat, c120 = mod(t, 120.0);
   float scroll = b * SP;
   float wx = p.x - BX + scroll;                        // world x of this pixel
 
@@ -101,20 +142,8 @@ void main() {
     float ci = floor(sx / cw);
     float h = -0.12 - 0.06 * fl + band(fract(ci * 0.137 + fl * 0.5)) * (0.12 - 0.04 * fl) + hash12(vec2(ci, fl)) * 0.035;
     float bar = step(p.y, h) * step(0.1, fract(sx / cw)) * step(fract(sx / cw), 0.9);
-    col = mix(col, mix(uPal[0] * 0.55, uPal[0] * 0.3 + uPal[1] * 0.06, fl), bar * (1.0 - egg * 0.7));
-    col += uPal[1] * exp(-abs(p.y - h) * 300.0) * step(0.1, fract(sx / cw)) * step(fract(sx / cw), 0.9) * 0.06 * (1.0 - egg);   // glowing bar tops
-  }
-
-  // disco rays + mirror ball for the reward
-  if (egg > 0.0) {
-    vec2 mb = p - vec2(0.0, 0.33);
-    float a = atan(mb.y, mb.x);
-    float rays = pow(abs(sin(a * 9.0 + t * 0.8)), 24.0) * smoothstep(0.03, 0.3, length(mb));
-    col += pal(fract(a / TAU + t * 0.05)) * rays * egg * 0.35;
-    float ball = disk(mb, 0.055, aa);
-    vec2 tiles = floor((rot(t * 0.6) * mb) * 90.0);
-    col = mix(col, mix(vec3(0.35), vec3(1.0), step(0.6, hash12(tiles + floor(t * 6.0)))) * (0.6 + 0.4 * uKick), ball * egg);
-    col = mix(col, vec3(0.6), strokeSeg(p, vec2(0.0, 0.385), vec2(0.0, 0.6), 0.0015, aa) * egg);
+    col = mix(col, mix(uPal[0] * 0.55, uPal[0] * 0.3 + uPal[1] * 0.06, fl), bar);
+    col += uPal[1] * exp(-abs(p.y - h) * 300.0) * step(0.1, fract(sx / cw)) * step(fract(sx / cw), 0.9) * 0.06;   // glowing bar tops
   }
 
   // platforms
@@ -125,56 +154,73 @@ void main() {
     float since = b - (i - 1.0);                         // beats since Bloop landed here
     float flash = since >= 1.0 ? exp(-(since - 1.0) * 3.0) : 0.0;
     float top = boxMask(q - vec2(0.0, -0.012), vec2(0.07, 0.012), 0.008, aa);
-    col = mix(col, mix(uPal[0], uPal[1], 0.35) + 0.02, top * (1.0 - egg));
+    col = mix(col, mix(uPal[0], uPal[1], 0.35) + 0.02, top);
     float edge = 1.0 - smoothstep(0.0012 - aa, 0.0012 + aa, abs(boxSDF(q - vec2(0.0, -0.012), vec2(0.07, 0.012), 0.008)));
-    col += mix(uPal[1], uPal[3], flash) * edge * (0.55 + 1.2 * flash) * (1.0 - egg);
-    col += uPal[1] * exp(-max(-q.y, 0.0) * 30.0) * step(abs(q.x), 0.07) * step(q.y, -0.024) * 0.08 * (1.0 - egg);  // underglow
+    col += mix(uPal[1], uPal[3], flash) * edge * (0.55 + 1.2 * flash);
+    col += uPal[1] * exp(-max(-q.y, 0.0) * 30.0) * step(abs(q.x), 0.07) * step(q.y, -0.024) * 0.08;  // underglow
     // record above the platform: collected when Bloop passes
     float taken = smoothstep(i - 0.1, i + 0.05, b);
     vec2 rq = q - vec2(0.0, 0.085 + sin(t * 2.0 + i) * 0.006);
-    col = mix(col, record(col, rq, t * 3.0 + i, aa), (1.0 - taken) * (1.0 - egg));
+    col = mix(col, record(col, rq, t * 3.0 + i, aa), 1.0 - taken);
     // sparkle burst where it was collected
     float pop = (b - i) * step(i, b);
     float burst = exp(-pop * 4.0) * step(0.0, pop);
     for (int s = 0; s < 6; s++) {
       float a = float(s) * TAU / 6.0 + i;
       vec2 sp = rq - vec2(cos(a), sin(a)) * pop * 0.12;
-      col += uPal[2] * disk(sp, 0.004, aa) * burst * (1.0 - egg);
+      col += uPal[2] * disk(sp, 0.004, aa) * burst;
     }
   }
 
-  // Glitchies follow Bloop's path at a distance (orbit during the reward)
+  // The visit: saucer arrives (90-94 s), beams the alien down (94-96 s), the alien chases Bloop on the
+  // beat and closes in (96-115 s), then the saucer returns and beams it up (115-118 s).
+  float alienOn = step(94.0, c120) * (1.0 - step(117.8, c120));
+  float lag = mix(1.25, 0.8, smoothstep(96.0, 114.0, c120));
+  vec2 aw = hopPath(b - lag);
+  vec2 chase = vec2(aw.x - scroll + BX, aw.y);
+  vec2 hover = vec2(BX - 1.25 * SP, 0.27);
+  float inA = smoothstep(89.5, 93.5, c120), outA = smoothstep(96.5, 100.0, c120);
+  float inB = smoothstep(114.0, 116.0, c120), outB = smoothstep(117.8, 119.8, c120);
+  vec2 ufoPos = mix(vec2(0.75, 0.7), hover, inA) + vec2(0.9, 0.6) * outA * outA;
+  float ufoOn = step(89.5, c120) * (1.0 - step(100.0, c120));
+  if (c120 >= 114.0) { ufoPos = mix(vec2(-0.8, 0.7), vec2(chase.x, 0.27), inB) + vec2(-0.9, 0.6) * outB * outB; ufoOn = 1.0 - step(119.8, c120); }
+  float down = smoothstep(94.0, 96.0, c120), up = smoothstep(116.0, 117.8, c120);
+  vec2 alienPos = mix(ufoPos - vec2(0.0, 0.03), chase, down);
+  alienPos = mix(alienPos, ufoPos - vec2(0.0, 0.03), up);
+  float alienScale = 1.3 * mix(0.35, 1.0, down) * mix(1.0, 0.35, up);
+  float beamOn = (smoothstep(93.6, 94.2, c120) * (1.0 - smoothstep(96.0, 96.6, c120)) + smoothstep(115.6, 116.2, c120) * (1.0 - smoothstep(117.8, 118.4, c120)));
+  col = beam(col, p, ufoPos - vec2(0.0, 0.01), vec2(alienPos.x, alienPos.y), beamOn);
+  float chasing = step(96.0, c120) * (1.0 - step(116.0, c120));
+
+  // Glitchies follow Bloop's path at a distance (they hang back while the alien chases)
   for (int g = 2; g >= 0; g--) {
     float fg = float(g);
-    vec2 w = hopPath(b - 1.15 - fg * 0.8);
+    vec2 w = hopPath(b - 1.15 - fg * 0.8 - alienOn * 1.2);
     vec2 pos = vec2(w.x - scroll + BX, w.y + 0.026);
-    float a = fg * TAU / 3.0 + t * 1.2;
-    pos = mix(pos, vec2(cos(a) * 0.17, -0.02 + sin(a) * 0.07), egg);
     vec3 tint = g == 0 ? uPal[3] : g == 1 ? uPal[2] : mix(uPal[1], vec3(1.0), 0.4);
-    col = glitchy(col, p - pos, fg, mix(0.013, 0.015, egg), tint);
+    col = glitchy(col, p - pos, fg, 0.013, tint);
   }
 
-  // records orbit as a ring during the reward
-  if (egg > 0.0) {
-    for (int r = 0; r < 10; r++) {
-      float a = float(r) * TAU / 10.0 - t * 0.7;
-      vec2 c = vec2(cos(a) * 0.3, -0.02 + sin(a) * 0.12 + sin(b * PI + float(r)) * 0.01);
-      col = mix(col, record(col, p - c, t * 4.0 + float(r), aa), egg);
-    }
+  // the alien (behind Bloop) and the saucer
+  if (alienOn > 0.0) {
+    float fa = fract(b - lag);
+    float landA = chasing * max(exp(-fa * 9.0), 0.0);
+    col = alienChar(col, p - alienPos, landA, alienScale, aa);
   }
+  if (ufoOn > 0.0) col = ufo(col, (p - ufoPos) / 1.6, aa / 1.6);
 
   // Bloop
   vec2 feet = hopPath(b);
   vec2 bp = vec2(BX, feet.y);
   float f = fract(b);
   float land = exp(-f * 9.0) - 0.6 * sin(PI * f) * step(f, 0.5) * 0.3;
-  vec2 dance = vec2(sin(b * PI * 0.5) * 0.04, -0.07 + abs(sin(b * PI)) * 0.05);
-  bp = mix(bp, dance, egg);
-  float scale = mix(1.3, 2.4, egg);
+  float scale = 1.3;
   // contact shadow on the platform
-  float shadowY = mix(platH(floor(b + 0.5)), -0.07, egg);
+  float shadowY = platH(floor(b + 0.5));
   col *= 1.0 - 0.5 * exp(-dot((p - vec2(bp.x, shadowY)) * vec2(14.0, 60.0) / scale, (p - vec2(bp.x, shadowY)) * vec2(14.0, 60.0) / scale)) * (1.0 - smoothstep(0.0, 0.15, bp.y - shadowY));
-  col = bloopChar(col, p - bp, max(land, 0.0), scale, aa);
+  // while being chased Bloop glances back every fourth beat
+  float look = chasing > 0.0 && fract(b / 4.0) > 0.7 ? -1.0 : 1.0;
+  col = bloopChar(col, p - bp, max(land, 0.0), scale, aa, look);
 
   fragColor = vec4(max(col, vec3(0.0)), 1.0);
 }`,

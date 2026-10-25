@@ -49,7 +49,7 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
 - Must run on an iPhone at 60 fps at ~0.6× resolution. Raymarch ≤ 110 steps, use a bounding
   sphere early-out, no nested loops over > 50 iterations.
 - Colours come from `uPal` / `pal()` so every visual follows the album art. Avoid hard-coded hues
-  (exception: Soul Beat's white disc, Chrome's white lights).
+  (exception: Soul Beat's white disc).
 - Output can exceed 1.0; the final pass tone-maps (ACES) and adds bloom, vignette and grain.
 - Use `P()` for coordinates: shorter screen side spans −0.5…0.5, works in portrait and landscape.
 - Anti-alias edges with `fwidth` / `px = 1.5 / min(uRes.x, uRes.y)`.
