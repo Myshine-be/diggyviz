@@ -60,74 +60,74 @@ vec3 drawCar(vec3 col, vec2 car, float px, float kick) {
   return col;
 }
 // Strings: glowing wave lines streaming above the roof like a banner.
-vec3 attrStrings(vec3 col, vec2 q, float px, float B) {
+vec3 attrStrings(vec3 col, vec2 q, float px) {
   if(abs(q.x)>.2||q.y<.08||q.y>.32)return col;
   float u=clamp(q.x/.36+.5,0.0,1.0),env=pow(sin(PI*u),1.2);
   float lines=0.0;
   for(int i=0;i<6;i++){float fi=float(i);
     float w=sin(u*(3.0+fi)*PI+uTime*(1.2+.2*fi)+fi)*.6+sin(u*7.0*PI-uTime*1.7+fi*2.0)*.4;
-    float y=.2+env*w*(.012+.05*specAt(u,B-fi*.08));
+    float y=.2+env*(waveAt(fract(u+fi*.031))*.05+w*.012);
     lines+=lineAt(q.y-y,dFdx(y)/max(dFdx(q.x),1e-5),px)*(.5+.08*fi);}
   return col+lineCol(.3)*lines*.7;
 }
 // Bubbles: a little swarm turning round the car.
-vec3 attrBubbles(vec3 col, vec2 q, float px, float B) {
+vec3 attrBubbles(vec3 col, vec2 q, float px) {
   vec2 c=q-vec2(0,.06);
   if(length(c*vec2(.8,1.1))>.32)return col;
   float r=length(c),a=atan(c.y,c.x);
-  float R=.19+.03*specAt(.1,B);
+  float R=.19;
   float dens=exp(-pow((r-R)/.045,2.0))*(.35+.65*pow(.5+.5*cos(a-uTime*1.2),2.0));
   vec2 g=(rot(uTime*.3)*c+vec2(0,uTime*.02))/.022;vec2 id=floor(g);
   float b=0.0;
   for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){vec2 cid=id+vec2(i,j);
-    if(hash12(cid+3.0)<.4)continue;
+    float keep=smoothstep(.55-.25*histAt(.06,0.0),.65-.25*histAt(.06,0.0),hash12(cid+3.0));
     vec2 pos=cid+.2+.6*hash22(cid);float d=length(g-pos)*.022,rad=.022*(.18+.2*hash12(cid));
-    b+=1.0-smoothstep(rad-max(px,rad*.4),rad+max(px,rad*.4),d);}
+    b+=(1.0-smoothstep(rad-max(px,rad*.4),rad+max(px,rad*.4),d))*keep;}
   return col+lineCol(.55)*b*dens*.9+uPal[1]*dens*.05;
 }
 // Halo: spectrum circles hovering over the car; a new one grows out every half beat.
-vec3 attrHalo(vec3 col, vec2 q, float px, float B) {
+vec3 attrHalo(vec3 col, vec2 q, float px) {
   vec2 c=q-vec2(0,.2);
   if(abs(c.x)>.2||abs(c.y)>.1)return col;
-  float B2=B*2.0,fr=fract(B2);
+  float fr=fract(uTime*9.0);
   for(int k=0;k<6;k++){float fk=float(k);
     float R=.05+(fk+fr)*.022;float th=atan(c.y/.33,c.x);
     float f=abs(fract((th+uTime*.3)/TAU+.5)*2.0-1.0);
-    float sp=specAt(f,(floor(B2)-fk)*.5);
+    float sp=histAt(f,(fk+fr)/9.0);
     vec2 e=vec2(c.x,c.y-sp*.035);
     col+=lineCol(f)*ellipseLine(e,R,R*.33,px)*exp(-fk*.25)*smoothstep(0.0,.7,fk+fr)*(e.y<0.0?.9:.5);}
   return col;
 }
 // Orbit: a small turning sphere of lines on the roof.
-vec3 attrOrbit(vec3 col, vec2 q, float px, float B) {
+vec3 attrOrbit(vec3 col, vec2 q, float px) {
   vec2 c=q-vec2(0,.16);
   if(length(c)>.1)return col;
   float R=.075,sT=sin(.42),cT=cos(.42),rot_=uTime*.8;
   for(int k=0;k<7;k++){float lat=mix(-1.2,1.2,(float(k)+.5)/7.0);float r=R*cos(lat);
     vec2 e=vec2(c.x,c.y-R*sin(lat)*cT);
     float lam=atan(-e.y/sT,e.x),lon=lam+rot_,f=abs(lat)/1.2;
-    float rr=r*(1.0+specAt(f,B-fract(lon/TAU)*2.0)*.12*(.6+.4*sin(lon*5.0)));
+    float rr=r*(1.0+histAt(f,fract(lon/TAU)*1.2)*.16*(.6+.4*sin(lon*5.0)));
     float zf=R*sin(lat)*sT+rr*sin(lam)*cT;
     col+=lineCol(f)*ellipseLine(e,rr,rr*sT,px)*(zf>0.0?.95:.3);}
   return col;
 }
 // Vanish: light trails from a car's taillights to the road's vanishing point, rippling on the beat.
-float trail(vec2 p, vec2 a, vec2 b, float px, float B, float seed) {
+float trail(vec2 p, vec2 a, vec2 b, float px, float seed) {
   vec2 v=b-a;float u=clamp(dot(p-a,v)/dot(v,v),0.0,1.0);
   vec2 n=normalize(vec2(-v.y,v.x));
-  float off=(1.0-u)*specAt(.15+seed*.3,B-u*6.0)*.035*sin(u*30.0-uTime*4.0+seed*3.0);
+  float off=(1.0-u)*histAt(fract(.15+seed*.17),u*2.0)*.05*sin(u*30.0-uTime*4.0+seed*3.0);
   float d=abs(dot(p-a-v*u,n)-off);
   return exp(-d/(px*1.2))*(1.0-u)*.35;
 }
 
 void main() {
   vec2 p=P();
+  float t=uSceneTime, egg=surprise(t), travel=t*.75;
   // Portrait: zoom in and lower the scene so the car sits in the lower third, not mid-screen.
   float tall=clamp(uRes.y/uRes.x-1.0,0.0,1.3);
-  float zoom=1.0-0.22*tall;
-  p=p*zoom+vec2(0.0,0.19*tall);
+  float zoom=mix(1.0-0.22*tall,1.0,egg);
+  p=p*zoom+vec2(0.0,mix(0.19,0.04,egg)*tall);
   float px=1.2*zoom/min(uRes.x,uRes.y);
-  float t=uSceneTime, egg=surprise(t), travel=t*.75;
   float horizon=.17;
   vec3 col=mix(uPal[0]*.15,uPal[1]*.12,exp(-abs(p.y-horizon)*4.0));
   // Star field, far mountains and a striped setting sun.
@@ -192,24 +192,25 @@ void main() {
     }
   }
   // 90-second reward: a convoy of four cars joins you, each carrying one of the DiggyViz visuals.
-  float c120=mod(t,120.0), B=beatNow();
+  float c120=mod(t,120.0);
   vec2 carPos=vec2(sin(t*.28)*.025,-.29+.004*uKick);
   float halfV=.5*uRes.x/min(uRes.x,uRes.y)*zoom;          // visible half-width in scene units
   vec2 vp=vec2(bend(30.0,t),horizon+.004);                  // where the road meets the horizon
   // slot: x (fraction of the visible half-width), y, scale; kinds 0 strings, 1 bubbles, 2 halo, 3 orbit
-  vec4 slots[4]=vec4[4](vec4(-.42,-.13,.62,2.0),vec4(.42,-.13,.62,3.0),vec4(-.62,-.37,.88,0.0),vec4(.62,-.37,.88,1.0));
+  vec4 slots[4]=vec4[4](vec4(-.42,-.13,.62,2.0),vec4(.42,-.13,.62,3.0),vec4(-.58,-.37,.88,0.0),vec4(.58,-.37,.88,1.0));
   vec3 cars[4];float shown[4];
   for(int i=0;i<4;i++){float fi=float(i);vec4 s=slots[i];
     float enter=smoothstep(90.0+fi*.6,91.9+fi*.6,c120),leave=smoothstep(101.0+fi*.5,104.5+fi*.5,c120);
     enter=enter*enter*(3.0-2.0*enter);
     vec2 pos=vec2(s.x*min(halfV,.62)+sin(t*.6+fi*1.7)*.015,mix(-1.1,s.y,enter)+.004*uKick);
-    float sc=s.z;
+    // Reserve room for the widest roof attribute, including sway and glow.
+    float sc=min(s.z, max(.2,(halfV-abs(pos.x)-.018)/.40));
     pos=mix(pos,vp,leave*leave);sc*=mix(1.0,.06,leave);
     cars[i]=vec3(pos,sc);shown[i]=enter*(1.0-step(.999,leave));}
   if(egg>0.0){   // Vanish: taillight trails into the vanishing point, behind all cars
-    float tr=trail(p,carPos+vec2(-.1,-.02),vp,px,B,0.0)+trail(p,carPos+vec2(.1,-.02),vp,px,B,1.0);
+    float tr=trail(p,carPos+vec2(-.1,-.02),vp,px,0.0)+trail(p,carPos+vec2(.1,-.02),vp,px,1.0);
     for(int i=0;i<4;i++)if(shown[i]>0.0){vec3 cr=cars[i];
-      tr+=(trail(p,cr.xy+vec2(-.1,-.02)*cr.z,vp,px,B,float(i)+2.0)+trail(p,cr.xy+vec2(.1,-.02)*cr.z,vp,px,B,float(i)+2.5))*shown[i];}
+      tr+=(trail(p,cr.xy+vec2(-.1,-.02)*cr.z,vp,px,float(i)+2.0)+trail(p,cr.xy+vec2(.1,-.02)*cr.z,vp,px,float(i)+2.5))*shown[i];}
     col+=lineCol(.75)*tr*egg;
   }
   // far pair first, then you, then the near pair (they are closer to the camera)
@@ -219,10 +220,10 @@ void main() {
       vec3 cr=cars[i];vec2 q=(p-cr.xy)/cr.z;float pq=px/cr.z;int kind=int(slots[i].w);
       vec3 before=col;
       col=drawCar(col,q,pq,uKick);
-      if(kind==0)col=attrStrings(col,q,pq,B);
-      else if(kind==1)col=attrBubbles(col,q,pq,B);
-      else if(kind==2)col=attrHalo(col,q,pq,B);
-      else col=attrOrbit(col,q,pq,B);
+      if(kind==0)col=attrStrings(col,q,pq);
+      else if(kind==1)col=attrBubbles(col,q,pq);
+      else if(kind==2)col=attrHalo(col,q,pq);
+      else col=attrOrbit(col,q,pq);
       col=mix(before,col,clamp(shown[i]*1.5,0.0,1.0));}
   }
   fragColor=vec4(max(col,vec3(0)),1);

@@ -51,6 +51,12 @@ export class Engine {
     this.cur = null; this.old = null; this.fade = 1;
     this.mixT = this.bloomA = this.bloomB = null;
     this.artTex = this.#texture(2, 2);
+    // sound data for the shaders (js/audio-data.js): 128 x 65 bytes, exact texel reads
+    this.audioTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.audioTex);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 128, 65, 0, gl.RED, gl.UNSIGNED_BYTE, new Uint8Array(128 * 65));
+    for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
     this.W = 0; this.H = 0;
     this.#resize();
   }
@@ -127,14 +133,20 @@ export class Engine {
     if (!this.cur || gl.isContextLost()) return;
     this.#resize();
     const sceneDt = f.sceneDt ?? f.dt;
-    for (const slot of [this.cur, this.old]) if (slot?.clock) slot.clock.advance(sceneDt, f.bpm);
+    for (const slot of [this.cur, this.old]) if (slot?.clock) slot.clock.advance(sceneDt, f.bpm, f.beatPhase);
     this.#adapt(f.dt, f.time);
-    this.travel += f.dt * (0.35 + f.audio.energy * 0.9 + f.audio.kick * 0.9 + f.drop * 6.0);
+    this.travel += f.dt * 0.8; // steady camera speed; audio only changes local details
     if (this.fade < 1) this.fade = Math.min(1, this.fade + f.dt / this.fadeDur);
     if (this.fade >= 1 && this.old) { this.#freeSlot(this.old); this.old = null; }
 
     gl.bindVertexArray(this.vao);
     gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST);
+    if (f.sound) {
+      gl.bindTexture(gl.TEXTURE_2D, this.audioTex);
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 128, 65, gl.RED, gl.UNSIGNED_BYTE, f.sound.bytes);
+    }
+    this.sound = f.sound;
 
     const a = this.#drawVisual(this.cur, f);
     const b = this.old ? this.#drawVisual(this.old, f) : a;
@@ -181,6 +193,8 @@ export class Engine {
     if (L.uPal) gl.uniform3fv(L.uPal, [...pal.dark, ...pal.mid, ...pal.hi, ...pal.hot].map((v) => v / 255));
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.tex); if (L.uPrev) gl.uniform1i(L.uPrev, 0);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.artTex); if (L.uArt) gl.uniform1i(L.uArt, 1);
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.audioTex); if (L.uAudio) gl.uniform1i(L.uAudio, 2);
+    set1("uHistHead", this.sound?.head ?? 0); set1("uLive", this.sound?.live ? 1 : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     slot.i = 1 - slot.i;
     return dst.tex;

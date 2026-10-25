@@ -104,3 +104,20 @@ test('an interrupted audio context (iOS call/Siri) is resumed, not stopped', asy
   assert.equal(c.state, 'running');
   assert.equal(f.L.active, true);
 });
+
+test('synchronous device failure does not leave start permanently pending', async () => {
+  let calls=0;
+  const L=createListener({media:()=>({getUserMedia(){calls++;throw new Error('device unavailable');}}),AudioCtx:()=>class{},doc:()=>null});
+  assert.equal(await L.start(),false); assert.equal(L.starting,false);
+  assert.equal(await L.start(),false); assert.equal(calls,2);
+});
+test('failed resume cannot reuse a frozen microphone frame as live sound', async () => {
+  const f=fakes();const p=f.L.start();f.requests[0].allow();await p;
+  const c=f.contexts[0];c.resume=()=>Promise.reject(new Error('interrupted'));
+  c.state='interrupted';c.dispatchEvent(new Event('statechange'));await tick();
+  assert.equal(f.L.active,true);assert.equal(f.L.receiving,false);
+  const out={bands:new Float32Array(32),peaks:new Float32Array(32)};
+  f.L.analyse(out,1/60);assert.equal(out.kick,0);
+  const wave=new Float32Array(128).fill(1);f.L.wave(wave,1/60);assert.ok(wave.every(v=>v===0));
+  f.L.stop();assert.deepEqual(f.leaks(),{liveTracks:0,openContexts:0});
+});

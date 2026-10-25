@@ -12,6 +12,7 @@ import { createLastfmSource } from "./sources/lastfm.js";
 import { createDemoSource } from "./sources/demo.js";
 import { createTempoLookup } from "./tempo-lookup.js";
 import { createListener } from "./listen.js";
+import { audioData, setWave, feedHistory, synthWave, resetAudioData, WAVE_N } from "./audio-data.js";
 
 if (window.__bridge) throw new Error("iOS bridge redirect");
 
@@ -29,6 +30,7 @@ let lastSwitch = performance.now();
 let firstTrack = true;
 let sourceVersion = 0;
 const tempoLookup = createTempoLookup({ store });
+let tempoOrigin = "default";
 let tempoAuto = false;   // true while the tempo comes from the Deezer lookup (not tapped)
 const listener = createListener({ onStatus: (m, err) => status(m, err), onChange: () => listenChanged() });
 
@@ -78,20 +80,36 @@ function loadTempo(defBpm = 120) {
   const auto = !valid && tempoLookup.cached(track.id);
   tempo = valid ? saved : { bpm: auto || defBpm, off: 0 };
   tempoAuto = !!auto;
+  tempoOrigin = valid ? "tapped" : auto ? "found" : defBpm !== 120 || sourceName === "demo" ? "demo" : "default";
   showTempo();
 }
 function showTempo() {
-  $("tap").firstChild.nodeValue = Math.round(tempo.bpm) + " ";
-  $("tap").querySelector("small").textContent = tempoAuto ? "AUTO" : "BPM";
-  $("tap").title = tempoAuto ? "Tempo automatisch opgezocht. Tik 1× op de beat om de timing exact te zetten." : "Tik mee op de beat";
+  const mic = listener.active;
+  const source = mic ? (listener.receiving ? "mic" : "interrupted") : tempoOrigin;
+  const labels = { mic: "MIC", interrupted: "WACHT", found: "AUTO", tapped: "BPM", demo: "DEMO", loading: "ZOEK", missing: "SCHAT", unavailable: "SCHAT", default: "SCHAT" };
+  const notes = {
+    mic: "Microfoon: gemeten geluid; het tempo is een schatting.",
+    interrupted: "Microfoon onderbroken. Tik op het scherm om opnieuw te proberen.",
+    found: "Tempo via Deezer. Tik mee om de timing bij te stellen; geen geluidsanalyse.",
+    tapped: "Tempo en timing ingesteld met jouw tikken.", demo: "Demoritme; geen analyse van de muziek.",
+    loading: "Tempo wordt opgezocht. Tot dan wordt 120 BPM gebruikt.",
+    missing: "Geen tempo gevonden. 120 BPM is een schatting; tik mee of zet de microfoon aan.",
+    unavailable: "Tempo-opzoekdienst niet bereikbaar. 120 BPM is een schatting; tik mee of gebruik de microfoon.",
+    default: "120 BPM is een schatting. Tik mee of gebruik de microfoon voor het geluid.",
+  };
+  $("tap").firstChild.nodeValue = Math.round(mic ? listener.bpm : tempo.bpm) + " ";
+  $("tap").querySelector("small").textContent = labels[source];
+  $("tap").title = notes[source];
+  $("tempoStatus").textContent = notes[source];
 }
 function lookupTempo(t) {
-  const id = t.id;
-  if (t.bpm || store.get("tempo." + id) || tempoAuto) return;   // demo songs bring their own tempo
+  const id = t.id, version = sourceVersion;
+  if (t.bpm || tempoOrigin === "tapped" || tempoAuto) return;
+  tempoOrigin = "loading"; showTempo();
   tempoLookup.lookup(t).then((bpm) => {
-    if (!bpm || track.id !== id || store.get("tempo." + id)) return;   // song changed or you tapped meanwhile
-    tempo = { bpm, off: tempo.off };
-    tempoAuto = true;
+    if (track.id !== id || sourceVersion !== version || tempoOrigin === "tapped") return;
+    if (bpm) { tempo = { bpm, off: tempo.off }; tempoAuto = true; }
+    tempoOrigin = tempoLookup.state(id);
     showTempo();
   });
 }
@@ -173,16 +191,29 @@ function refreshSpotifyState() {
 
 /* ---------------- render loop ---------------- */
 let last = performance.now(), t0 = last, lastBpmShown = 0;
+const micWave = new Float32Array(WAVE_N);
+let soundMode = null;
 function frame(now) {
   const elapsed = Math.max(0, (now - last) / 1000);
   const dt = Math.min(0.1, elapsed); last = now;
   const pos = position();
+  const mode = listener.active ? (listener.receiving ? "mic" : "interrupted") : "simulated";
+  if (mode !== soundMode) {
+    resetAudioData(); soundMode = mode;
+    audio.bands.fill(0); audio.peaks.fill(0);
+    for (const key of ["kick", "snare", "hat", "energy", "level"]) audio[key] = 0;
+  }
   // Listening mode: the microphone's real kicks drive the rhythm (beat phase and tempo). Otherwise the
   // simulated rhythm follows the song position and the tapped / looked-up tempo.
   if (listener.active) listener.analyse(audio, dt);
   else analyse(pos, track.playing, hashStr(track.id || "x"), tempo.bpm, tempo.off, dt);
   const bpmNow = listener.active ? listener.bpm : tempo.bpm;
-  if (listener.active && now - lastBpmShown > 1000) { lastBpmShown = now; $("tap").firstChild.nodeValue = Math.round(bpmNow) + " "; $("tap").querySelector("small").textContent = "MIC"; }
+  // the sound the visuals draw: real waveform + spectrum history from the microphone, else simulated
+  audioData.live = listener.receiving;
+  if (listener.active) { listener.wave(micWave, dt); setWave(micWave); }
+  else setWave(synthWave(audio.bands, audio.kick, track.playing ? dt : 0));
+  feedHistory(audio.bands, dt);
+  if (listener.active && now - lastBpmShown > 1000) { lastBpmShown = now; showTempo(); }
   drop = Math.max(0, drop - dt * 0.7);
   const k = 1 - Math.exp(-dt * 2.2);
   for (const key of ["dark", "mid", "hi", "hot"]) for (let i = 0; i < 3; i++) palCur[key][i] += (palTarget[key][i] - palCur[key][i]) * k;
@@ -193,7 +224,7 @@ function frame(now) {
 
   if (engine) {
     try {
-      engine.render({ sceneDt: document.visibilityState === "visible" && track.playing && !sheetOpen() ? elapsed : 0, bpm: bpmNow, time: (now - t0) / 1000, dt, songTime: pos / 1000, audio, pal: palCur, drop, seed: hashStr(track.id || "x") % 1000 });
+      engine.render({ sceneDt: document.visibilityState === "visible" && track.playing && !sheetOpen() ? elapsed : 0, bpm: bpmNow, beatPhase: audio.beat, time: (now - t0) / 1000, dt, songTime: pos / 1000, audio, pal: palCur, drop, seed: hashStr(track.id || "x") % 1000, sound: audioData });
     } catch (e) { console.error(e); }
   }
   $("bar").style.width = (track.dur ? (pos / track.dur) * 100 : 0) + "%";
@@ -213,7 +244,7 @@ $("tap").addEventListener("click", (e) => {
     const bpm = Math.min(220, Math.max(50, 60000 / avg));
     const beatLen = 60000 / bpm;
     tempo = { bpm, off: ((position() % beatLen) + beatLen) % beatLen };
-    tempoAuto = false;
+    tempoAuto = false; tempoOrigin = "tapped";
     store.set("tempo." + track.id, tempo);
     showTempo();
   } else if (taps.length === 1 && (tempoAuto || store.get("tempo." + track.id))) {
@@ -221,6 +252,7 @@ $("tap").addEventListener("click", (e) => {
     const beatLen = 60000 / tempo.bpm;
     tempo = { bpm: tempo.bpm, off: ((position() % beatLen) + beatLen) % beatLen };
     store.set("tempo." + track.id, tempo);
+    tempoAuto = false; tempoOrigin = "tapped"; showTempo();
     status("Timing gezet op je tik.");
   }
 });
@@ -241,7 +273,7 @@ function showListen() {
   const on = listener.active || listener.starting;
   $("listenBtn").setAttribute("aria-pressed", String(on));
   $("listenChk").checked = on;
-  if (!on) showTempo();
+  showTempo();
 }
 async function setListen(on) {
   const my = ++listenReq; // only the latest choice may update the screen
@@ -251,7 +283,7 @@ async function setListen(on) {
     showListen();
     const ok = await pend;
     if (my !== listenReq) return;
-    if (ok) status("Luistermodus aan: de visuals volgen nu de echte beat.");
+    if (ok) status("Luistermodus aan: de visuals reageren op het gemeten geluid.");
   } else { listener.stop(); status("Luistermodus uit."); }
   listenChanged();
 }

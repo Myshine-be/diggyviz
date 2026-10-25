@@ -21,6 +21,9 @@ uniform float uPeaks[32];
 uniform vec3  uPal[4];     // 0 dark, 1 mid, 2 hi, 3 hot (0..1)
 uniform sampler2D uPrev;   // this visual's previous frame (feedback)
 uniform sampler2D uArt;    // album art (or palette gradient)
+uniform sampler2D uAudio;  // row 0: waveform, rows 1-64: spectrum history (see js/audio-data.js)
+uniform float uHistHead;   // newest history row (0..63)
+uniform float uLive;       // 1 = real sound from the microphone, 0 = simulated
 
 out vec4 fragColor;
 
@@ -64,6 +67,24 @@ float wave(float x) {
   return (sin((x * f1 + t * 0.9) * TAU) * (0.35 + uKick * 0.6)
         + sin((x * f2 - t * 1.7) * TAU) * (0.2 + uSnare * 0.4)
         + sin((x * f3 + t * 3.1) * TAU) * (0.08 + uHat * 0.35)) * max(uEnergy, 0.15);
+}
+
+// The sound itself. waveAt(x): oscilloscope trace, x 0..1 → -1..1.
+// histAt(f, age): spectrum level 0..1 at frequency f (0 low … 1 high), age seconds ago (0 … 2.1).
+float waveAt(float x) {
+  float fx = clamp(x, 0.0, 1.0) * 127.0; int i = int(floor(fx));
+  return mix(texelFetch(uAudio, ivec2(i, 0), 0).r, texelFetch(uAudio, ivec2(min(i + 1, 127), 0), 0).r, fract(fx)) * 2.0 - 1.0;
+}
+float histRow(float fb, float row) {
+  int r = int(mod(uHistHead - row + 64.0, 64.0)) + 1;
+  int b = int(fb);
+  return mix(texelFetch(uAudio, ivec2(b, r), 0).r, texelFetch(uAudio, ivec2(min(b + 1, 31), r), 0).r, fract(fb));
+}
+float histAt(float f, float age) {
+  float fb = clamp(f, 0.0, 1.0) * 31.0;
+  float row = clamp(age, 0.0, 2.1) * 30.0;
+  float r0 = floor(row);
+  return mix(histRow(fb, r0), histRow(fb, min(r0 + 1.0, 63.0)), row - r0);
 }
 
 // Anti-aliased thin line at integer values of x

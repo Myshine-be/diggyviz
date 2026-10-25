@@ -16,7 +16,6 @@ void main() {
   float R = 0.3;
   float T = 0.42;                                   // view tilt
   float rot = uTime * 0.15;
-  float B = beatNow();
   vec3 col = uPal[0] * 0.12;
 
   float sT = sin(T), cT = cos(T);
@@ -29,8 +28,8 @@ void main() {
     float lam = atan(-q.y / sT, q.x);
     float lon = lam + rot;
     float f = abs(lat) / 1.25;                      // equator = lows, poles = highs
-    float b = B - fract(lon / TAU) * 3.0;           // ripples travel round the sphere, one per beat
-    float rr = r * (1.0 + specAt(f, b) * 0.07 * (0.6 + 0.4 * sin(lon * 6.0 + fk)));
+    float age = fract(lon / TAU) * 1.5;            // the sound of the last 1.5 s wraps round the sphere
+    float rr = r * (1.0 + histShape(f, age) * 0.14 * (0.6 + 0.4 * sin(lon * 6.0 + fk)));
     float zf = R * sin(lat) * sT + rr * sin(lam) * cT;   // towards the viewer > 0
     col += lineCol(f) * ellipseLine(q, rr, rr * sT, px) * (zf > 0.0 ? 0.95 : 0.3) * 0.85;
   }

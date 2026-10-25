@@ -1,28 +1,15 @@
 // Shared GLSL for the line visuals (Landscape, Halo, Vanish, Orbit).
-// beatNow(): continuous beat count locked to the song's beat phase (uBeat), so history lines land on the beat.
-// specAt(f, b): the spectrum at frequency f (0 low … 1 high) at beat position b. It uses the same rhythm
-// model as js/rhythm.js (kick on every beat, snare on 2 and 4, hats on the off-beats), so lines drawn
-// for earlier beats match what the bars showed then. Rows at the present use the live bands.
+// The line visuals draw the sound itself: histAt(f, secondsAgo) and waveAt(x) from js/glsl.js read the
+// spectrum history and waveform (real sound in listening mode, simulated otherwise; see js/audio-data.js).
+// beatNow(): continuous beat count locked to the song's beat phase (uBeat), for things that step on the beat.
 export const SPECTRUM_HISTORY = /* glsl */ `
 float beatNow() {
   float d = uBeat - fract(uSceneBeat);
   d -= floor(d + 0.5);
   return uSceneBeat + d;
 }
-float specAt(float f, float b) {
-  b += 0.09;                       // the ramp starts just before the beat so the peak lands on it
-  float ph = fract(b);
-  // short attack ramps keep the lines continuous (no vertical streaks)
-  float atk = smoothstep(0.0, 0.12, ph);
-  float kick = exp(-ph * 6.5) * atk;
-  float snare = mod(floor(b), 2.0) > 0.5 ? exp(-ph * 9.0) * atk : 0.0;
-  float hph = fract(b * 2.0);
-  float hat = exp(-hph * 16.0) * smoothstep(0.0, 0.1, hph) * (0.5 + 0.5 * noise2(vec2(floor(b * 2.0), uSeed)));
-  float base = noise2(vec2(f * 7.0 + uSeed * 0.37, b * 1.3)) * (1.0 - f * 0.55);
-  float v = base * 0.55 + kick * pow(1.0 - f, 2.2) * 1.15
-          + snare * exp(-pow((f - 0.45) / 0.18, 2.0)) * 0.8 + hat * pow(f, 1.4) * 0.75;
-  return clamp(v * max(uEnergy, 0.2) * 0.95, 0.0, 1.0);
-}
+// spectrum with more contrast, so quiet bands stay low and only real peaks stand up (no flat plateaus)
+float histShape(float f, float age) { float v = histAt(f, age); return v * v * (1.6 - 0.6 * v); }
 // album colour for frequency f, lifted so lines stay visible on dark covers
 vec3 lineCol(float f) {
   vec3 c = pal(0.4 + 0.58 * f);

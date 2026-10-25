@@ -16,26 +16,46 @@ export function bpmFromTrack(j) {
   return Math.round(b * 10) / 10;
 }
 
-let seq = 0;
-/** Default JSONP transport (browser only). Resolves with the parsed object or rejects after `ms`. */
+/** Run JSONP in an opaque-origin sandbox, never alongside the Spotify session. */
 export function jsonp(url, ms = 8000) {
   return new Promise((resolve, reject) => {
-    const cb = "__dzcb" + (++seq) + "_" + Date.now().toString(36);
-    const s = document.createElement("script");
-    const done = (fn, v) => { clearTimeout(timer); try { delete window[cb]; } catch { window[cb] = undefined; } s.remove(); fn(v); };
-    const timer = setTimeout(() => done(reject, new Error("timeout")), ms);
-    window[cb] = (data) => done(resolve, data);
-    s.onerror = () => done(reject, new Error("network"));
-    s.src = url + (url.includes("?") ? "&" : "?") + "output=jsonp&callback=" + cb;
-    document.head.appendChild(s);
+    const nonce = crypto.randomUUID();
+    const frame = document.createElement("iframe");
+    frame.hidden = true;
+    frame.setAttribute("sandbox", "allow-scripts"); // deliberately NO allow-same-origin
+    frame.setAttribute("title", "Tempo opzoeken");
+    const finish = (fn, value) => {
+      clearTimeout(timer); window.removeEventListener("message", receive); frame.remove(); fn(value);
+    };
+    const receive = (e) => {
+      if (e.source !== frame.contentWindow || e.data?.nonce !== nonce) return;
+      if (e.data.error) finish(reject, new Error("network"));
+      else finish(resolve, e.data.value);
+    };
+    const timer = setTimeout(() => finish(reject, new Error("timeout")), ms);
+    window.addEventListener("message", receive);
+    const src = url + (url.includes("?") ? "&" : "?") + "output=jsonp&callback=__tempo";
+    const literal = value => JSON.stringify(value).replace(/</g, "\\u003c");
+    frame.srcdoc = '<script>const nonce=' + literal(nonce) +
+      ';window.__tempo=value=>parent.postMessage({nonce,value},"*");' +
+      'const s=document.createElement("script");s.src=' + literal(src) +
+      ';s.onerror=()=>parent.postMessage({nonce,error:true},"*");document.head.appendChild(s);<\/script>';
+    document.body.appendChild(frame);
   });
 }
 
 export function createTempoLookup({ store, fetchJsonp = jsonp, now = () => Date.now() }) {
-  const inflight = new Map();
+  const inflight = new Map(), states = new Map();
   async function find(t) {
     let failed = false;
-    const get = (url) => fetchJsonp(url).catch(() => { failed = true; return null; });
+    const get = async (url) => {
+      try {
+        const result = await fetchJsonp(url);
+        // API errors (rate limits, service failures) are not a valid "unknown song" result.
+        if (result?.error) { failed = true; return null; }
+        return result;
+      } catch { failed = true; return null; }
+    };
     if (t.isrc && /^[A-Z0-9]{12}$/i.test(t.isrc)) {
       const j = await get(`${API}/track/isrc:${encodeURIComponent(t.isrc.toUpperCase())}`);
       const b = bpmFromTrack(j);
@@ -51,16 +71,23 @@ export function createTempoLookup({ store, fetchJsonp = jsonp, now = () => Date.
     return { bpm, failed };
   }
   return {
+    state(id) { return states.get(id) || "idle"; },
     /** Cached BPM for a song id, or 0. */
-    cached(id) { const c = store.get("bpm." + id); return c && c.bpm > 0 ? c.bpm : 0; },
+    cached(id) { const c = store.get("bpm." + id); return c && Number.isFinite(c.bpm) && c.bpm >= 50 && c.bpm <= 220 ? c.bpm : 0; },
     /** Look up a song's BPM ({ id, isrc?, name, artists }). Resolves 0 when unknown. */
     lookup(t) {
       if (!t?.id) return Promise.resolve(0);
       const c = store.get("bpm." + t.id);
-      if (c && (c.bpm > 0 || now() - (c.at || 0) < WEEK)) return Promise.resolve(c.bpm || 0);
+      const valid = c && Number.isFinite(c.bpm) && c.bpm >= 50 && c.bpm <= 220;
+      if (valid || (c?.bpm === 0 && now() - (c.at || 0) < WEEK)) {
+        states.set(t.id, valid ? "found" : "missing");
+        return Promise.resolve(valid ? c.bpm : 0);
+      }
       if (inflight.has(t.id)) return inflight.get(t.id);
+      states.set(t.id, "loading");
       const p = find(t).catch(() => ({ bpm: 0, failed: true })).then(({ bpm, failed }) => {
         inflight.delete(t.id);
+        states.set(t.id, bpm > 0 ? "found" : failed ? "unavailable" : "missing");
         if (bpm > 0 || !failed) store.set("bpm." + t.id, { bpm, at: now() });   // a network error is not cached
         return bpm;
       });
