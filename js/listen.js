@@ -47,7 +47,7 @@ export function processSpectrum(st, spec, dt, out) {
   for (let i = 0; i < st.nb; i++) {
     const [a, b] = st.edges[i];
     const v = avgBins(spec, a, b);
-    st.bandMax[i] = Math.max(v, st.bandMax[i] - dt * 0.05, 0.12);
+    st.bandMax[i] = Math.max(v, st.bandMax[i] - dt * 0.05, 0.04);   // low floor: quiet rooms / far microphones still fill the range
     const target = clamp(v / st.bandMax[i]) * (1 - (i / st.nb) * 0.25);
     const cur = out.bands[i];
     out.bands[i] = target > cur ? target : Math.max(target, cur - 2.4 * dt);
@@ -96,7 +96,7 @@ export function processSpectrum(st, spec, dt, out) {
 
   // overall energy with automatic gain; a drop = loud bass after a quieter stretch
   const level = sum / st.nb;
-  st.levelMax = Math.max(level, st.levelMax - dt * 0.03, 0.1);
+  st.levelMax = Math.max(level, st.levelMax - dt * 0.03, 0.03);
   const energy = clamp(level / st.levelMax * 1.1);
   st.fast += (rel - st.fast) * (1 - Math.exp(-dt * 4));
   st.slow += (rel - st.slow) * (1 - Math.exp(-dt * 0.25));
@@ -111,6 +111,28 @@ export function processSpectrum(st, spec, dt, out) {
   out.beat = ((st.t - st.phaseAt) / beatLen) % 1; out.beatIdx = st.beatIdx;
   out.t = st.t;
   return out;
+}
+
+/**
+ * Oscilloscope trace from raw samples: starts at a rising zero crossing (so the trace stands still on
+ * steady tones), averages down to `out.length` points and applies automatic gain with a slow release,
+ * so quiet music or a far microphone still fills the range. Returns the gain state.
+ */
+export function waveFrom(samples, out, gain = { peak: 0.02 }, dt = 1 / 60) {
+  const n = out.length, span = Math.floor(samples.length / 2);
+  let start = 0;
+  for (let i = 1; i < samples.length - span; i++) if (samples[i - 1] < 0 && samples[i] >= 0) { start = i; break; }
+  const step = span / n;
+  let peak = 0;
+  for (let i = 0; i < n; i++) {
+    let s = 0; const a = start + Math.floor(i * step), b = start + Math.floor((i + 1) * step);
+    for (let j = a; j < b; j++) s += samples[j];
+    out[i] = s / Math.max(1, b - a);
+    peak = Math.max(peak, Math.abs(out[i]));
+  }
+  gain.peak = Math.max(peak, gain.peak * Math.exp(-dt * 0.8), 0.003);   // fast attack, ~1 s release
+  for (let i = 0; i < n; i++) out[i] = Math.max(-1, Math.min(1, out[i] / gain.peak));
+  return gain;
 }
 
 /**
@@ -155,6 +177,7 @@ export function createListener({ onStatus = () => {}, onChange = () => {}, media
           r.an.fftSize = 2048; r.an.smoothingTimeConstant = 0.45; r.an.minDecibels = -90; r.an.maxDecibels = -15;
           srcNode.connect(r.an); // not connected to the speakers: no echo
           r.buf = new Uint8Array(r.an.frequencyBinCount);
+          r.tbuf = new Float32Array(r.an.fftSize); r.gain = { peak: 0.02 };
           r.st = makeDetector(r.ctx.sampleRate, r.an.fftSize);
           r.stream.getAudioTracks()[0]?.addEventListener("ended", () => {
             if (res !== r) return;
@@ -190,6 +213,13 @@ export function createListener({ onStatus = () => {}, onChange = () => {}, media
       if (!L.active) return;
       res.an.getByteFrequencyData(res.buf);
       processSpectrum(res.st, res.buf, dt, out);
+    },
+    /** Fill `out` (-1..1) with the current oscilloscope trace from the microphone. */
+    wave(out, dt) {
+      if (!L.active) return false;
+      res.an.getFloatTimeDomainData(res.tbuf);
+      waveFrom(res.tbuf, out, res.gain, dt);
+      return true;
     },
   };
   return L;

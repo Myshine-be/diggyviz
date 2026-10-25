@@ -12,6 +12,7 @@ import { createLastfmSource } from "./sources/lastfm.js";
 import { createDemoSource } from "./sources/demo.js";
 import { createTempoLookup } from "./tempo-lookup.js";
 import { createListener } from "./listen.js";
+import { audioData, setWave, feedHistory, synthWave, WAVE_N } from "./audio-data.js";
 
 if (window.__bridge) throw new Error("iOS bridge redirect");
 
@@ -173,6 +174,7 @@ function refreshSpotifyState() {
 
 /* ---------------- render loop ---------------- */
 let last = performance.now(), t0 = last, lastBpmShown = 0;
+const micWave = new Float32Array(WAVE_N);
 function frame(now) {
   const elapsed = Math.max(0, (now - last) / 1000);
   const dt = Math.min(0.1, elapsed); last = now;
@@ -182,6 +184,10 @@ function frame(now) {
   if (listener.active) listener.analyse(audio, dt);
   else analyse(pos, track.playing, hashStr(track.id || "x"), tempo.bpm, tempo.off, dt);
   const bpmNow = listener.active ? listener.bpm : tempo.bpm;
+  // the sound the visuals draw: real waveform + spectrum history from the microphone, else simulated
+  audioData.live = listener.active && listener.wave(micWave, dt);
+  setWave(audioData.live ? micWave : synthWave(audio.bands, audio.kick, track.playing ? dt : 0));
+  feedHistory(audio.bands, dt);
   if (listener.active && now - lastBpmShown > 1000) { lastBpmShown = now; $("tap").firstChild.nodeValue = Math.round(bpmNow) + " "; $("tap").querySelector("small").textContent = "MIC"; }
   drop = Math.max(0, drop - dt * 0.7);
   const k = 1 - Math.exp(-dt * 2.2);
@@ -193,7 +199,7 @@ function frame(now) {
 
   if (engine) {
     try {
-      engine.render({ sceneDt: document.visibilityState === "visible" && track.playing && !sheetOpen() ? elapsed : 0, bpm: bpmNow, time: (now - t0) / 1000, dt, songTime: pos / 1000, audio, pal: palCur, drop, seed: hashStr(track.id || "x") % 1000 });
+      engine.render({ sceneDt: document.visibilityState === "visible" && track.playing && !sheetOpen() ? elapsed : 0, bpm: bpmNow, time: (now - t0) / 1000, dt, songTime: pos / 1000, audio, pal: palCur, drop, seed: hashStr(track.id || "x") % 1000, sound: audioData });
     } catch (e) { console.error(e); }
   }
   $("bar").style.width = (track.dur ? (pos / track.dur) * 100 : 0) + "%";

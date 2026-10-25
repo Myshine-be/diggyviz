@@ -33,6 +33,7 @@ void main() {
   col += haze * 0.35 * (fbm2(p * 2.5 + vec2(t * 0.03, -t * 0.02)) - 0.4);
 
   float dens = density(p, t);
+  float bass = histAt(0.06, 0.0);
   vec3 bc = lift(mix(uPal[2], uPal[1], 0.3), 0.75);
   col += bc * dens * 0.07;
 
@@ -46,7 +47,8 @@ void main() {
     vec2 base = floor(gp);
     for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
       vec2 id = base + vec2(i, j) + fl * 101.0;
-      if (hash12(id + 7.0) < 0.35) continue;
+      float keep = smoothstep(0.55 - 0.25 * bass, 0.65 - 0.25 * bass, hash12(id + 7.0));   // more bubbles fade in with the bass
+      if (keep <= 0.0) continue;
       vec2 h = hash22(id);
       vec2 pos = base + vec2(i, j) + 0.15 + 0.7 * h;
       float d = length(gp - pos) * cs;
@@ -55,7 +57,7 @@ void main() {
       float b = 1.0 - smoothstep(rad - soft, rad + soft, d);
       b *= 0.7 + 0.4 * smoothstep(rad * 0.4, rad, d);  // bokeh rim
       float tw = 0.8 + 0.2 * sin(t * (1.5 + 2.0 * h.x) + h.y * 40.0) + uHat * 0.25 * step(0.9, h.y);
-      col += bc * b * dens * tw * gain;
+      col += bc * b * dens * tw * gain * keep;
     }
   }
   fragColor = vec4(col, 1.0);

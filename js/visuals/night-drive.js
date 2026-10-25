@@ -66,7 +66,7 @@ vec3 attrStrings(vec3 col, vec2 q, float px, float B) {
   float lines=0.0;
   for(int i=0;i<6;i++){float fi=float(i);
     float w=sin(u*(3.0+fi)*PI+uTime*(1.2+.2*fi)+fi)*.6+sin(u*7.0*PI-uTime*1.7+fi*2.0)*.4;
-    float y=.2+env*w*(.012+.05*specAt(u,B-fi*.08));
+    float y=.2+env*(waveAt(fract(u+fi*.031))*.05+w*.012);
     lines+=lineAt(q.y-y,dFdx(y)/max(dFdx(q.x),1e-5),px)*(.5+.08*fi);}
   return col+lineCol(.3)*lines*.7;
 }
@@ -75,12 +75,12 @@ vec3 attrBubbles(vec3 col, vec2 q, float px, float B) {
   vec2 c=q-vec2(0,.06);
   if(length(c*vec2(.8,1.1))>.32)return col;
   float r=length(c),a=atan(c.y,c.x);
-  float R=.19+.03*specAt(.1,B);
+  float R=.19;
   float dens=exp(-pow((r-R)/.045,2.0))*(.35+.65*pow(.5+.5*cos(a-uTime*1.2),2.0));
   vec2 g=(rot(uTime*.3)*c+vec2(0,uTime*.02))/.022;vec2 id=floor(g);
   float b=0.0;
   for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){vec2 cid=id+vec2(i,j);
-    if(hash12(cid+3.0)<.4)continue;
+    if(hash12(cid+3.0)<.6-.35*histAt(.06,0.0))continue;
     vec2 pos=cid+.2+.6*hash22(cid);float d=length(g-pos)*.022,rad=.022*(.18+.2*hash12(cid));
     b+=1.0-smoothstep(rad-max(px,rad*.4),rad+max(px,rad*.4),d);}
   return col+lineCol(.55)*b*dens*.9+uPal[1]*dens*.05;
@@ -89,11 +89,11 @@ vec3 attrBubbles(vec3 col, vec2 q, float px, float B) {
 vec3 attrHalo(vec3 col, vec2 q, float px, float B) {
   vec2 c=q-vec2(0,.2);
   if(abs(c.x)>.2||abs(c.y)>.1)return col;
-  float B2=B*2.0,fr=fract(B2);
+  float fr=fract(uTime*9.0);
   for(int k=0;k<6;k++){float fk=float(k);
     float R=.05+(fk+fr)*.022;float th=atan(c.y/.33,c.x);
     float f=abs(fract((th+uTime*.3)/TAU+.5)*2.0-1.0);
-    float sp=specAt(f,(floor(B2)-fk)*.5);
+    float sp=histAt(f,(fk+fr)/9.0);
     vec2 e=vec2(c.x,c.y-sp*.035);
     col+=lineCol(f)*ellipseLine(e,R,R*.33,px)*exp(-fk*.25)*smoothstep(0.0,.7,fk+fr)*(e.y<0.0?.9:.5);}
   return col;
@@ -106,7 +106,7 @@ vec3 attrOrbit(vec3 col, vec2 q, float px, float B) {
   for(int k=0;k<7;k++){float lat=mix(-1.2,1.2,(float(k)+.5)/7.0);float r=R*cos(lat);
     vec2 e=vec2(c.x,c.y-R*sin(lat)*cT);
     float lam=atan(-e.y/sT,e.x),lon=lam+rot_,f=abs(lat)/1.2;
-    float rr=r*(1.0+specAt(f,B-fract(lon/TAU)*2.0)*.12*(.6+.4*sin(lon*5.0)));
+    float rr=r*(1.0+histAt(f,fract(lon/TAU)*1.2)*.16*(.6+.4*sin(lon*5.0)));
     float zf=R*sin(lat)*sT+rr*sin(lam)*cT;
     col+=lineCol(f)*ellipseLine(e,rr,rr*sT,px)*(zf>0.0?.95:.3);}
   return col;
@@ -115,7 +115,7 @@ vec3 attrOrbit(vec3 col, vec2 q, float px, float B) {
 float trail(vec2 p, vec2 a, vec2 b, float px, float B, float seed) {
   vec2 v=b-a;float u=clamp(dot(p-a,v)/dot(v,v),0.0,1.0);
   vec2 n=normalize(vec2(-v.y,v.x));
-  float off=(1.0-u)*specAt(.15+seed*.3,B-u*6.0)*.035*sin(u*30.0-uTime*4.0+seed*3.0);
+  float off=(1.0-u)*histAt(fract(.15+seed*.17),u*2.0)*.05*sin(u*30.0-uTime*4.0+seed*3.0);
   float d=abs(dot(p-a-v*u,n)-off);
   return exp(-d/(px*1.2))*(1.0-u)*.35;
 }

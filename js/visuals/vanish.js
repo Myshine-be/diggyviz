@@ -1,6 +1,6 @@
 // Vanish — a fan of lines running from the left edge into one vanishing point on the right.
-// Each line is one frequency over time: the present is on the left, and every beat's peak
-// travels along the line towards the point.
+// Each line is one frequency over the last two seconds: the present is on the left, and every peak
+// of the real sound travels along the line towards the point.
 import { SPECTRUM_HISTORY } from "./spectrum-history.js";
 
 export default {
@@ -17,8 +17,7 @@ void main() {
   float halfW = 0.5 * uRes.x / min(uRes.x, uRes.y);
   float xL = -halfW, xR = halfW * 0.96;
   float u = clamp((p.x - xL) / (xR - xL), 0.0, 1.0);       // 0 left … 1 vanishing point
-  float B = beatNow();
-  float age = pow(u, 1.5) * 10.0;                          // beats ago, compressed towards the point
+  float age = pow(u, 1.5) * 2.0;                           // seconds ago, compressed towards the point
   float shrink = pow(1.0 - u, 1.15);
   vec3 col = uPal[0] * 0.12;
 
@@ -26,9 +25,9 @@ void main() {
     float fi = float(i);
     float f = fi / float(NL - 1);
     float spread = (f - 0.5) * 0.22 + (hash12(vec2(fi, 9.1)) - 0.5) * 0.03;
-    float sp = age < 0.25 ? mix(band(f), specAt(f, B - age), age * 4.0) : specAt(f, B - age);
+    float sp = histShape(f, age);
     float side = mod(fi, 2.0) < 0.5 ? 1.0 : -1.0;          // peaks above and below, like the video
-    float y = shrink * (spread + side * sp * (0.16 - f * 0.06));
+    float y = shrink * (spread + side * sp * (0.3 - f * 0.1));
     float slope = dFdx(y) / max(dFdx(p.x), 1e-5);
     col += lineCol(f) * lineAt(p.y - y, slope, px) * (0.5 + 0.5 * shrink) * 0.8;
   }

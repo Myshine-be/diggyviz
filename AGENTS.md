@@ -20,7 +20,8 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
 | `js/rhythm.js` | Synthetic rhythm (no audio access): kick/snare/hat/energy + 32 bands from song position + BPM |
 | `js/tempo-lookup.js` | Automatic BPM per song from Deezer (JSONP; Spotify ISRC, else artist + title). Cached in `rv.bpm.<id>` |
 | `js/listen.js` | Listening mode: microphone → Web Audio → same `audio` fields as rhythm.js (real kicks, tempo). Never records |
-| `js/visuals/spectrum-history.js` | Shared GLSL for line visuals: `beatNow()`, `specAt(f, beat)`, `lineCol()`, `lineAt()`, `ellipseLine()` |
+| `js/audio-data.js` | Sound for the shaders: waveform + 2 s spectrum history in one 128×65 texture (`uAudio`). Real from the mic, simulated otherwise |
+| `js/visuals/spectrum-history.js` | Shared GLSL for line visuals: `histShape()`, `beatNow()`, `lineCol()`, `lineAt()`, `ellipseLine()` |
 | `js/palette.js` | Album-art → 4-colour palette |
 | `js/visuals/*.js` | One file per visual. Registry in `js/visuals/index.js` |
 | `js/sources/*.js` | `spotify.js`, `lastfm.js`, `demo.js` — same interface |
@@ -79,7 +80,9 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
 4. Work on a branch, open a pull request; Mo merges to `main` (that is what GitHub Pages serves).
 
 ## Line visuals (Landscape, Halo, Vanish, Orbit)
-Draw history with `specAt(f, beatNow() - n)` so every line lands on the song's beat (tempo from tap, Deezer or the mic).
+Draw the sound itself: `waveAt(x)` (oscilloscope) and `histAt(f, secondsAgo)` / `histShape()` (spectrum history).
+In listening mode this is the real sound (measured: picture follows the microphone within one frame); never draw a
+simulated rhythm on top of it. Keep the newest row/sample on screen.
 Use `ellipseLine()` for circles/ellipses; `lineAt()` caps the slope so steep curves don't leave vertical streaks.
 
 ## Story visuals
