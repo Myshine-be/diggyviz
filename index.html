@@ -2,534 +2,128 @@
 <html lang="nl">
 <head>
 <meta charset="utf-8">
-<title>RetroViz</title>
-<meta name="claude:viewport-fit-sides" content="cover">
+<title>DiggyViz</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Hypnotiserende muziekvisuals die meebewegen met wat je op Spotify speelt.">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="RetroViz">
-<meta name="theme-color" content="#121418">
+<meta name="apple-mobile-web-app-title" content="DiggyViz">
+<meta name="theme-color" content="#050506">
+<script>
+  // iOS app bridge: Spotify only allows https redirects, so the iPhone app's login lands here
+  // with state=ios.* and is forwarded to the app's custom URL scheme.
+  (function () {
+    var q = new URLSearchParams(location.search);
+    if ((q.get("state") || "").indexOf("ios.") === 0) {
+      document.write('<p style="font:16px system-ui;color:#fff;background:#000;padding:24px">Terug naar de app…</p>');
+      location.replace("retroviz://callback?" + location.search.slice(1));
+      window.__bridge = true;
+    }
+  })();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&family=Chakra+Petch:wght@500;700&display=swap">
-<style>
-/* Layout: one-screen "media player" — chassis bar, LCD readout, visualizer, transport-style mode keys. Deliberately single dark look. */
-:root {
-  --chassis: #16181d;
-  --chassis-hi: #23262e;
-  --edge: #30343e;
-  --lcd: #07100a;
-  --phosphor: #7dff8a;
-  --phosphor-dim: #2c6b37;
-  --ink: #c9ced8;
-  --ink-dim: #7c8392;
-  --accent: #ffb43d;
-  --font-lcd: "VT323", ui-monospace, "SF Mono", Menlo, monospace;
-  --font-ui: "Chakra Petch", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  color-scheme: dark;
-}
-html, body { height: 100%; margin: 0; }
-[hidden] { display: none !important; }
-body {
-  background: var(--chassis);
-  color: var(--ink);
-  font-family: var(--font-ui);
-  overflow: hidden;
-  -webkit-user-select: none; user-select: none;
-  -webkit-tap-highlight-color: transparent;
-}
-.app {
-  height: 100%;
-  display: flex; flex-direction: column; gap: 10px;
-  padding-left: max(12px, env(safe-area-inset-left, 0px));
-  padding-right: max(12px, env(safe-area-inset-right, 0px));
-  padding-block: calc(10px + env(safe-area-inset-top, 0px)) calc(10px + env(safe-area-inset-bottom, 0px));
-  box-sizing: border-box;
-  max-width: 900px; margin: 0 auto;
-}
-.titlebar {
-  display: flex; align-items: center; gap: 10px;
-  font-weight: 700; font-size: 13px; letter-spacing: .18em; text-transform: uppercase;
-  color: var(--ink-dim);
-}
-.titlebar .grip { flex: 1; height: 6px; background: repeating-linear-gradient(0deg, var(--edge) 0 1px, transparent 1px 3px); }
-.led { width: 8px; height: 8px; border-radius: 50%; background: #3a1414; box-shadow: inset 0 0 2px #000; }
-.led.on { background: var(--phosphor); box-shadow: 0 0 8px var(--phosphor); }
-.iconbtn {
-  font: inherit; color: var(--ink); background: var(--chassis-hi); border: 1px solid var(--edge);
-  border-radius: 4px; padding: 4px 9px; cursor: pointer; letter-spacing: .1em;
-}
-.iconbtn:focus-visible, .key:focus-visible, .field:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-.lcd {
-  display: grid; grid-template-columns: 58px 1fr; gap: 10px; align-items: center;
-  background: var(--lcd); border: 1px solid #000; border-radius: 4px;
-  box-shadow: inset 0 0 0 1px var(--edge), inset 0 8px 18px rgba(0,0,0,.6);
-  padding: 8px; font-family: var(--font-lcd); color: var(--phosphor);
-}
-.art { width: 58px; height: 58px; border-radius: 2px; background: #0d1a10 center/cover no-repeat; image-rendering: auto; box-shadow: 0 0 0 1px #000; }
-.readout { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.marquee { overflow: hidden; white-space: nowrap; font-size: 24px; line-height: 1; text-shadow: 0 0 6px rgba(125,255,138,.5); }
-.marquee span { display: inline-block; padding-left: 100%; animation: scroll 14s linear infinite; }
-@keyframes scroll { to { transform: translateX(-100%); } }
-.meta { display: flex; justify-content: space-between; gap: 8px; font-size: 19px; color: var(--phosphor-dim); font-variant-numeric: tabular-nums; }
-.meta b { color: var(--phosphor); font-weight: 400; }
-.progress { height: 4px; background: #0f2414; border-radius: 2px; overflow: hidden; margin-top: 3px; }
-.progress i { display: block; height: 100%; width: 0; background: var(--phosphor); box-shadow: 0 0 6px var(--phosphor); }
-
-.stage { position: relative; flex: 1; min-height: 0; border-radius: 4px; overflow: hidden; background: #000; box-shadow: 0 0 0 1px #000, 0 0 0 2px var(--edge); }
-canvas#viz { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.hint { position: absolute; left: 10px; bottom: 8px; font-family: var(--font-lcd); font-size: 16px; color: rgba(255,255,255,.35); pointer-events: none; }
-
-.keys { display: grid; grid-template-columns: repeat(4, 1fr) 1.3fr; gap: 6px; }
-.key {
-  font: 700 12px/1 var(--font-ui); letter-spacing: .12em; text-transform: uppercase;
-  color: var(--ink); background: linear-gradient(var(--chassis-hi), var(--chassis));
-  border: 1px solid var(--edge); border-bottom-color: #0b0c0f; border-radius: 4px;
-  padding: 12px 4px; cursor: pointer;
-}
-.key[aria-pressed="true"] { color: var(--lcd); background: var(--phosphor); border-color: var(--phosphor); box-shadow: 0 0 10px rgba(125,255,138,.35); }
-.key.tap { color: var(--accent); font-variant-numeric: tabular-nums; }
-.key.tap.flash { background: var(--accent); color: var(--lcd); }
-
-.kiosk .titlebar, .kiosk .lcd, .kiosk .keys { display: none; }
-.kiosk .stage { box-shadow: none; border-radius: 0; }
-
-/* settings sheet */
-.sheet { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: flex-end; justify-content: center; z-index: 20; }
-.panel {
-  width: 100%; max-width: 560px; max-height: 88%; overflow-y: auto; box-sizing: border-box;
-  background: var(--chassis); border: 1px solid var(--edge); border-radius: 10px 10px 0 0;
-  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
-  padding-block: 16px calc(16px + env(safe-area-inset-bottom, 0px));
-  display: flex; flex-direction: column; gap: 14px;
-}
-.panel h2 { margin: 0; font-size: 15px; letter-spacing: .16em; text-transform: uppercase; }
-.panel p { margin: 0; color: var(--ink-dim); font-size: 14px; line-height: 1.45; }
-.panel label { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-dim); display: flex; flex-direction: column; gap: 6px; }
-.field { font: 16px var(--font-lcd); color: var(--phosphor); background: var(--lcd); border: 1px solid var(--edge); border-radius: 4px; padding: 8px; width: 100%; box-sizing: border-box; -webkit-user-select: text; user-select: text; }
-.row { display: flex; gap: 8px; flex-wrap: wrap; }
-.row .key { flex: 1; min-width: 120px; }
-.status { font-family: var(--font-lcd); font-size: 18px; color: var(--accent); min-height: 1em; }
-.sep { border: 0; border-top: 1px solid var(--edge); margin: 0; }
-@media (prefers-reduced-motion: reduce) { .marquee span { animation: none; padding-left: 0; } }
-</style>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&family=Jost:wght@300;400&display=swap">
+<link rel="stylesheet" href="css/app.css">
 </head>
 <body>
 <div class="app" id="app">
-  <div class="titlebar">
-    <span class="led" id="led"></span>
-    <span>RetroViz</span>
-    <span class="grip"></span>
-    <button class="iconbtn" id="openSettings" aria-label="Instellingen">⚙</button>
-  </div>
+  <canvas id="viz" aria-label="Muziekvisual"></canvas>
+  <div class="caption" id="caption" hidden></div>
+  <div class="fallback" id="fallback" hidden></div>
 
-  <div class="lcd">
-    <div class="art" id="art"></div>
-    <div class="readout">
-      <div class="marquee"><span id="title">*** RETROVIZ *** DEMO-MODUS *** TIK OP ⚙ OM SPOTIFY TE KOPPELEN ***</span></div>
-      <div class="meta"><span id="artist">Geen nummer</span><span><b id="pos">0:00</b> / <span id="dur">0:00</span></span></div>
-      <div class="progress"><i id="bar"></i></div>
+  <header class="hud hud-top">
+    <div class="pill track" id="trackPill">
+      <div class="art" id="art"></div>
+      <div class="meta">
+        <div class="title" id="title">diggyviz</div>
+        <div class="artist" id="artist">Demo</div>
+        <div class="progress"><i id="bar"></i></div>
+      </div>
+      <span class="src" id="srcBadge">demo</span>
     </div>
-  </div>
+    <button class="icon" id="settingsBtn" aria-label="Instellingen">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8Zm8.4 4.5-1.6.9a6.9 6.9 0 0 1-.6 1.5l.5 1.8a.8.8 0 0 1-.2.8l-1.2 1.2a.8.8 0 0 1-.8.2l-1.8-.5a6.9 6.9 0 0 1-1.5.6l-.9 1.6a.8.8 0 0 1-.7.4h-1.7a.8.8 0 0 1-.7-.4l-.9-1.6a6.9 6.9 0 0 1-1.5-.6l-1.8.5a.8.8 0 0 1-.8-.2l-1.2-1.2a.8.8 0 0 1-.2-.8l.5-1.8a6.9 6.9 0 0 1-.6-1.5l-1.6-.9a.8.8 0 0 1-.4-.7v-1.7c0-.3.2-.6.4-.7l1.6-.9c.1-.5.4-1 .6-1.5l-.5-1.8a.8.8 0 0 1 .2-.8l1.2-1.2a.8.8 0 0 1 .8-.2l1.8.5c.5-.3 1-.5 1.5-.6l.9-1.6c.1-.3.4-.4.7-.4h1.7c.3 0 .6.2.7.4l.9 1.6c.5.1 1 .4 1.5.6l1.8-.5a.8.8 0 0 1 .8.2l1.2 1.2c.2.2.3.5.2.8l-.5 1.8c.3.5.5 1 .6 1.5l1.6.9c.3.1.4.4.4.7v1.7c0 .3-.2.6-.4.7Z"/></svg>
+    </button>
+  </header>
 
-  <div class="stage" id="stage">
-    <canvas id="viz"></canvas>
-    <div class="hint" id="hint">tik = volledig scherm</div>
-  </div>
+  <footer class="hud hud-bottom">
+    <div class="status" id="status" role="status"></div>
+    <nav class="chips" id="chips" aria-label="Visuals"></nav>
+    <div class="controls">
+      <button class="ctl tap" id="tap" aria-label="Tik mee op de beat">120 <small>BPM</small></button>
+      <button class="ctl" id="autoBtn" aria-pressed="true">Auto</button>
+      <button class="ctl" id="fsBtn">Volledig scherm</button>
+    </div>
+  </footer>
+</div>
 
-  <div class="keys" role="group" aria-label="Effect">
-    <button class="key" data-mode="bars" aria-pressed="true">Balken</button>
-    <button class="key" data-mode="scope" aria-pressed="false">Scope</button>
-    <button class="key" data-mode="tunnel" aria-pressed="false">Tunnel</button>
-    <button class="key" data-mode="plasma" aria-pressed="false">Plasma</button>
-    <button class="key tap" id="tap" aria-label="Tik mee op de beat">120 BPM</button>
+<!-- First run -->
+<div class="sheet" id="onboard" hidden>
+  <div class="panel" role="dialog" aria-labelledby="onTitle">
+    <h1 class="brand" id="onTitle">diggyviz</h1>
+    <p class="lead">Kies hoe DiggyViz weet wat je luistert.</p>
+    <div class="choices">
+      <button class="choice" data-pick="spotify"><b>Spotify</b><span>Inloggen met je Spotify-account. Voor jou en vrienden die je toevoegt.</span></button>
+      <button class="choice" data-pick="lastfm"><b>Last.fm</b><span>Voor iedereen. Alleen je Last.fm-gebruikersnaam, Spotify moet daaraan gekoppeld zijn.</span></button>
+      <button class="choice" data-pick="demo"><b>Gewoon kijken</b><span>Demo-muziek, geen account nodig.</span></button>
+    </div>
   </div>
 </div>
 
-<div class="sheet" id="sheet" hidden>
-  <div class="panel" role="dialog" aria-labelledby="sheetTitle">
-    <h2 id="sheetTitle">Spotify koppelen</h2>
-    <p>Maak een app op developer.spotify.com, plak hieronder de Client ID en zet dit adres bij Redirect URIs:</p>
-    <label>Redirect URI<input class="field" id="redirect" readonly></label>
-    <label>Client ID<input class="field" id="clientId" autocomplete="off" spellcheck="false" placeholder="32 tekens uit je Spotify-dashboard"></label>
-    <div class="row">
-      <button class="key" id="login">Inloggen met Spotify</button>
-      <button class="key" id="logout">Uitloggen</button>
+<!-- Settings -->
+<div class="sheet" id="settings" hidden>
+  <div class="panel" role="dialog" aria-labelledby="setTitle">
+    <div class="panel-head">
+      <h2 id="setTitle">Instellingen</h2>
+      <button class="ctl" id="closeSettings">Klaar</button>
     </div>
-    <div class="status" id="status"></div>
-    <hr class="sep">
-    <h2>Koppelcode</h2>
-    <p>Op een iPhone heeft de app op je beginscherm een eigen geheugen. Log in via Safari, kopieer daar de koppelcode en plak hem in de app op je beginscherm.</p>
-    <div class="row">
-      <button class="key" id="copyCode">Kopieer koppelcode</button>
-    </div>
-    <label>Koppelcode plakken<input class="field" id="pasteCode" autocomplete="off" spellcheck="false" placeholder="Plak hier"></label>
-    <div class="row"><button class="key" id="useCode">Koppelcode gebruiken</button></div>
-    <hr class="sep">
-    <div class="row"><button class="key" id="closeSettings">Sluiten</button></div>
+
+    <section>
+      <h3>Bron</h3>
+      <div class="seg" role="group" aria-label="Bron">
+        <button data-src="spotify">Spotify</button>
+        <button data-src="lastfm">Last.fm</button>
+        <button data-src="demo">Demo</button>
+      </div>
+    </section>
+
+    <section data-for="spotify">
+      <h3>Spotify</h3>
+      <p class="note" id="spState">Niet ingelogd.</p>
+      <div class="row">
+        <button class="btn primary" id="spLogin">Inloggen met Spotify</button>
+        <button class="btn" id="spLogout">Uitloggen</button>
+      </div>
+      <details>
+        <summary>App op beginscherm koppelen</summary>
+        <p class="note">De app op je beginscherm heeft een eigen geheugen. Log in via Safari, kopieer daar de koppelcode en plak hem in de app op je beginscherm.</p>
+        <div class="row">
+          <button class="btn" id="copyCode">Kopieer koppelcode</button>
+        </div>
+        <label class="field">Koppelcode plakken<input id="pasteCode" autocomplete="off" spellcheck="false" placeholder="Plak hier"></label>
+        <div class="row"><button class="btn" id="useCode">Koppelcode gebruiken</button></div>
+      </details>
+    </section>
+
+    <section data-for="lastfm">
+      <h3>Last.fm</h3>
+      <label class="field">Gebruikersnaam<input id="lfUser" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="bv. mo_be"></label>
+      <div class="row"><button class="btn primary" id="lfGo">Verbinden</button></div>
+      <p class="note">Nog niet gekoppeld? Ga op last.fm naar Instellingen → Applications → Spotify Scrobbling → Connect.</p>
+    </section>
+
+    <section>
+      <h3>Visuals</h3>
+      <label class="switch"><input type="checkbox" id="autoChk" checked> Automatisch wisselen (elke 45 s en bij elk nieuw nummer)</label>
+      <p class="note">Swipe links of rechts over het beeld om te wisselen. Tik op het beeld om de knoppen te verbergen. Tik minstens 3 keer op BPM, mee op de beat, om het ritme per nummer vast te leggen.</p>
+    </section>
+
+    <p class="foot" id="version"></p>
   </div>
 </div>
 
-<script>
-(() => {
-"use strict";
-
-/* ---------- storage (never trusted to exist) ---------- */
-const store = {
-  get(k, d = null) { try { const v = localStorage.getItem("rv." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
-  set(k, v) { try { localStorage.setItem("rv." + k, JSON.stringify(v)); } catch {} },
-  del(k) { try { localStorage.removeItem("rv." + k); } catch {} }
-};
-
-const $ = (id) => document.getElementById(id);
-const REDIRECT = location.origin + location.pathname;
-const SCOPES = "user-read-currently-playing user-read-playback-state";
-
-/* ---------- iOS app bridge: Spotify only allows https redirects ---------- */
-const qs = new URLSearchParams(location.search);
-if ((qs.get("state") || "").startsWith("ios.")) {
-  document.body.innerHTML = '<p style="font:20px VT323,monospace;color:#7dff8a;padding:24px">Terug naar de RetroViz-app…</p>';
-  location.replace("retroviz://callback?" + location.search.slice(1));
-  return;
-}
-
-/* ---------- small math helpers ---------- */
-function hashStr(s) { let h = 2166136261 >>> 0; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return h >>> 0; }
-function hash1(n, seed) { let t = (n * 374761393 + seed * 668265263) | 0; t = Math.imul(t ^ (t >>> 13), 1274126177); return ((t ^ (t >>> 16)) >>> 0) / 4294967296; }
-function noise(x, seed) { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return hash1(i, seed) * (1 - u) + hash1(i + 1, seed) * u; }
-const clamp = (v, a = 0, b = 1) => v < a ? a : v > b ? b : v;
-const mix = (a, b, t) => a + (b - a) * t;
-const mixRGB = (a, b, t) => [mix(a[0], b[0], t), mix(a[1], b[1], t), mix(a[2], b[2], t)];
-const rgb = (c, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
-const fmt = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
-
-/* ---------- synthetic "audio" driven by song position + BPM ----------
-   Spotify gives no audio data, so the visuals follow a generated rhythm
-   locked to the song's playback position (tap along to set the tempo). */
-const NB = 32;
-const audio = { bands: new Float32Array(NB), peaks: new Float32Array(NB), kick: 0, snare: 0, hat: 0, energy: 0, level: 0 };
-function analyse(posMs, playing, seed, bpm, offMs) {
-  const beatLen = 60000 / bpm;
-  const bp = (posMs - offMs) / beatLen;
-  const ph = bp - Math.floor(bp);
-  const beatIdx = Math.floor(bp);
-  const bar = Math.floor(bp / 4);
-  const kick = Math.exp(-ph * 6.5);
-  const snare = (beatIdx & 1) ? Math.exp(-ph * 9) : 0;
-  const hp = bp * 2 - Math.floor(bp * 2);
-  const hat = Math.exp(-hp * 16) * (0.5 + 0.5 * noise(bp * 2, seed + 9));
-  const intro = clamp(posMs / 8000);
-  const section = 0.5 + 0.5 * noise(bar / 8, seed + 3);
-  const energy = playing ? intro * (0.45 + 0.55 * section) : 0;
-  const t = posMs / 1000;
-  let sum = 0;
-  for (let i = 0; i < NB; i++) {
-    const f = i / (NB - 1);
-    const base = noise(t * (1.4 + f * 3) + i * 3.7, seed) * (1 - f * 0.55);
-    const low = kick * Math.pow(1 - f, 2.2) * 1.15;
-    const mid = snare * Math.exp(-Math.pow((f - 0.45) / 0.18, 2)) * 0.8;
-    const high = hat * Math.pow(f, 1.4) * 0.75;
-    const target = clamp((base * 0.55 + low + mid + high) * energy * 0.95);
-    const cur = audio.bands[i];
-    audio.bands[i] = target > cur ? target : Math.max(target, cur - 0.035);
-    audio.peaks[i] = Math.max(audio.peaks[i] - 0.008, audio.bands[i]);
-    sum += audio.bands[i];
-  }
-  audio.kick = kick * energy; audio.snare = snare * energy; audio.hat = hat * energy;
-  audio.energy = energy; audio.level = sum / NB;
-  audio.t = t; audio.seed = seed;
-}
-function wave(x) {
-  // x in 0..1 → -1..1, shaped by the same rhythm
-  const s = audio.seed || 1, t = audio.t || 0;
-  const f1 = 2 + (s % 3), f2 = 5 + (s % 5), f3 = 11 + (s % 7);
-  return (Math.sin((x * f1 + t * 0.9) * 6.283) * (0.35 + audio.kick * 0.6)
-        + Math.sin((x * f2 - t * 1.7) * 6.283) * (0.2 + audio.snare * 0.4)
-        + Math.sin((x * f3 + t * 3.1) * 6.283) * (0.08 + audio.hat * 0.35)
-        + (noise(x * 40 + t * 20, s) - 0.5) * audio.hat * 0.5) * audio.energy;
-}
-
-/* ---------- palette from album art ---------- */
-const DEFAULT_PAL = { dark: [6, 18, 10], mid: [40, 200, 90], hi: [250, 235, 90], hot: [255, 70, 50] };
-let pal = { ...DEFAULT_PAL };
-function toHSV([r, g, b]) { r /= 255; g /= 255; b /= 255; const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn; let h = 0; if (d) { h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h /= 6; if (h < 0) h += 1; } return [h, mx ? d / mx : 0, mx]; }
-function fromHSV(h, s, v) { const i = Math.floor(h * 6), f = h * 6 - i, p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s); const m = [[v, t, p], [q, v, p], [p, v, t], [p, q, v], [t, p, v], [v, p, q]][i % 6]; return m.map((x) => x * 255); }
-function paletteFrom(url) {
-  return new Promise((resolve) => {
-    if (!url) return resolve({ ...DEFAULT_PAL });
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      try {
-        const c = document.createElement("canvas"); c.width = c.height = 24;
-        const x = c.getContext("2d", { willReadFrequently: true }); x.drawImage(img, 0, 0, 24, 24);
-        const d = x.getImageData(0, 0, 24, 24).data; const px = [];
-        for (let i = 0; i < d.length; i += 4) px.push([d[i], d[i + 1], d[i + 2]]);
-        let vivid = px[0], vs = -1;
-        for (const p of px) { const [, s, v] = toHSV(p); const score = s * s * v * (v > 0.3 ? 1 : 0.2); if (score > vs) { vs = score; vivid = p; } }
-        const [h, s] = toHSV(vivid);
-        const sat = Math.max(0.55, s);
-        resolve({ dark: fromHSV(h, sat * 0.8, 0.07), mid: fromHSV(h, sat, 0.85), hi: fromHSV((h + 0.12) % 1, sat * 0.6, 1), hot: fromHSV((h + 0.5) % 1, 0.85, 1) });
-      } catch { resolve({ ...DEFAULT_PAL }); }
-    };
-    img.onerror = () => resolve({ ...DEFAULT_PAL });
-    img.src = url;
-  });
-}
-
-/* ---------- renderers ---------- */
-const cv = $("viz"), ctx = cv.getContext("2d");
-const fb = document.createElement("canvas"), fbx = fb.getContext("2d");
-const pl = document.createElement("canvas"); pl.width = 96; pl.height = 64; const plx = pl.getContext("2d"); const plImg = plx.createImageData(96, 64);
-let W = 0, H = 0, DPR = 1;
-function resize() {
-  DPR = Math.min(2, window.devicePixelRatio || 1);
-  const r = cv.getBoundingClientRect();
-  W = Math.max(1, Math.round(r.width * DPR)); H = Math.max(1, Math.round(r.height * DPR));
-  cv.width = W; cv.height = H; fb.width = W; fb.height = H;
-}
-new ResizeObserver(resize).observe(cv);
-
-function drawBars() {
-  ctx.fillStyle = rgb(pal.dark); ctx.fillRect(0, 0, W, H);
-  const n = W / DPR < 500 ? 20 : 32, gap = Math.max(2, W * 0.006);
-  const bw = (W - gap * (n + 1)) / n, cell = Math.max(3, Math.round(H / 34)), cg = Math.max(1, Math.round(cell * 0.3));
-  const rows = Math.floor(H * 0.92 / cell);
-  for (let i = 0; i < n; i++) {
-    const v = audio.bands[Math.floor(i * NB / n)], pk = audio.peaks[Math.floor(i * NB / n)];
-    const lit = Math.round(v * rows), x = gap + i * (bw + gap);
-    for (let r = 0; r < rows; r++) {
-      const y = H - (r + 1) * cell, f = r / rows;
-      const col = f < 0.6 ? mixRGB(pal.mid, pal.hi, f / 0.6) : mixRGB(pal.hi, pal.hot, (f - 0.6) / 0.4);
-      ctx.fillStyle = r < lit ? rgb(col) : rgb(col, 0.07);
-      ctx.fillRect(x, y, bw, cell - cg);
-    }
-    const py = H - Math.round(pk * rows + 1) * cell;
-    ctx.fillStyle = rgb([255, 255, 255], 0.9); ctx.fillRect(x, py, bw, Math.max(2, cell * 0.45));
-  }
-}
-
-function drawScope() {
-  ctx.fillStyle = rgb(pal.dark, 0.38); ctx.fillRect(0, 0, W, H);
-  ctx.strokeStyle = rgb(pal.mid, 0.12); ctx.lineWidth = 1;
-  for (let i = 1; i < 8; i++) { ctx.beginPath(); ctx.moveTo(i * W / 8, 0); ctx.lineTo(i * W / 8, H); ctx.stroke(); }
-  for (let i = 1; i < 6; i++) { ctx.beginPath(); ctx.moveTo(0, i * H / 6); ctx.lineTo(W, i * H / 6); ctx.stroke(); }
-  ctx.save();
-  ctx.shadowColor = rgb(pal.mid); ctx.shadowBlur = 14 * DPR;
-  ctx.strokeStyle = rgb(mixRGB(pal.mid, pal.hi, audio.kick)); ctx.lineWidth = 2.2 * DPR;
-  ctx.beginPath();
-  const steps = 240;
-  for (let i = 0; i <= steps; i++) { const x = i / steps, y = H / 2 + wave(x) * H * 0.42; i ? ctx.lineTo(x * W, y) : ctx.moveTo(0, y); }
-  ctx.stroke(); ctx.restore();
-}
-
-let spin = 0;
-function drawTunnel() {
-  // Milkdrop-style feedback: previous frame zoomed + rotated, then new shape on top
-  fbx.globalCompositeOperation = "copy"; fbx.drawImage(cv, 0, 0);
-  ctx.fillStyle = rgb(pal.dark, 1); ctx.fillRect(0, 0, W, H);
-  spin += 0.004 + audio.kick * 0.018;
-  ctx.save();
-  ctx.translate(W / 2, H / 2); ctx.rotate(0.012 + audio.snare * 0.03); const z = 1.025 + audio.kick * 0.045; ctx.scale(z, z);
-  ctx.globalAlpha = 0.93; ctx.drawImage(fb, -W / 2, -H / 2);
-  ctx.restore();
-  const R = Math.min(W, H) * (0.14 + audio.level * 0.22);
-  ctx.save(); ctx.translate(W / 2, H / 2); ctx.rotate(spin);
-  ctx.strokeStyle = rgb(mixRGB(pal.mid, pal.hot, audio.snare)); ctx.lineWidth = (1.5 + audio.kick * 3) * DPR;
-  ctx.shadowColor = rgb(pal.hi); ctx.shadowBlur = 10 * DPR;
-  ctx.beginPath();
-  for (let i = 0; i <= 180; i++) { const a = i / 180 * Math.PI * 2, r = R * (1 + wave(i / 180) * 0.6); const x = Math.cos(a) * r, y = Math.sin(a) * r; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
-  ctx.closePath(); ctx.stroke(); ctx.restore();
-}
-
-let ptime = 0;
-function drawPlasma(dt) {
-  ptime += dt * (0.4 + audio.energy * 1.4 + audio.kick * 2);
-  const d = plImg.data, w = 96, h = 64, t = ptime;
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const u = x / w, v = y / h;
-    let s = Math.sin(u * 10 + t) + Math.sin((v * 8 + t * 0.7)) + Math.sin((u * 6 + v * 6 + t * 1.3)) + Math.sin(Math.hypot(u - 0.5, v - 0.5) * 18 - t * 2);
-    s = (s + 4) / 8;
-    const k = s * 3 % 1, band = Math.floor(s * 3) % 3;
-    const a = band === 0 ? pal.dark : band === 1 ? pal.mid : pal.hi, b = band === 0 ? pal.mid : band === 1 ? pal.hi : pal.hot;
-    const c = mixRGB(a, b, k), flash = 1 + audio.kick * 0.35, i = (y * w + x) * 4;
-    d[i] = Math.min(255, c[0] * flash); d[i + 1] = Math.min(255, c[1] * flash); d[i + 2] = Math.min(255, c[2] * flash); d[i + 3] = 255;
-  }
-  plx.putImageData(plImg, 0, 0);
-  ctx.imageSmoothingEnabled = true; ctx.drawImage(pl, 0, 0, W, H);
-}
-
-/* ---------- player state ---------- */
-const track = { id: "demo", name: "Demo-modus", artists: "Tik op ⚙ om Spotify te koppelen", art: "", dur: 213000, prog: 0, playing: true, at: performance.now() };
-let mode = store.get("mode", "bars");
-let tempo = { bpm: 120, off: 0 };
-
-function position() { return track.playing ? Math.min(track.dur, track.prog + (performance.now() - track.at)) : track.prog; }
-function loadTempo() { tempo = store.get("tempo." + track.id, { bpm: 120, off: 0 }); $("tap").textContent = Math.round(tempo.bpm) + " BPM"; }
-
-async function setTrack(t) {
-  const changed = t.id !== track.id;
-  Object.assign(track, t, { at: performance.now() });
-  if (changed) {
-    $("title").textContent = `*** ${t.artists.toUpperCase()} — ${t.name.toUpperCase()} ***`;
-    $("artist").textContent = t.artists;
-    $("art").style.backgroundImage = t.art ? `url("${t.art}")` : "none";
-    loadTempo();
-    pal = await paletteFrom(t.art);
-  }
-  $("dur").textContent = fmt(t.dur);
-}
-
-/* ---------- render loop ---------- */
-let last = performance.now();
-function frame(now) {
-  const dt = Math.min(0.1, (now - last) / 1000); last = now;
-  const pos = position();
-  if (track.id === "demo") { if (pos >= track.dur) { track.prog = 0; track.at = now; } }
-  analyse(pos, track.playing, hashStr(track.id), tempo.bpm, tempo.off);
-  if (W > 1) ({ bars: drawBars, scope: drawScope, tunnel: drawTunnel, plasma: drawPlasma })[mode](dt);
-  $("pos").textContent = fmt(pos);
-  $("bar").style.width = (track.dur ? pos / track.dur * 100 : 0) + "%";
-  requestAnimationFrame(frame);
-}
-
-/* ---------- controls ---------- */
-function setMode(m) { mode = m; store.set("mode", m); document.querySelectorAll(".key[data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === m))); }
-document.querySelectorAll(".key[data-mode]").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
-setMode(mode);
-
-let taps = [];
-$("tap").addEventListener("click", () => {
-  const now = performance.now();
-  if (taps.length && now - taps[taps.length - 1] > 2000) taps = [];
-  taps.push(now); if (taps.length > 8) taps.shift();
-  $("tap").classList.add("flash"); setTimeout(() => $("tap").classList.remove("flash"), 90);
-  if (taps.length >= 3) {
-    const avg = (taps[taps.length - 1] - taps[0]) / (taps.length - 1);
-    const bpm = clamp(60000 / avg, 50, 220);
-    const beatLen = 60000 / bpm;
-    tempo = { bpm, off: ((position() % beatLen) + beatLen) % beatLen };
-    store.set("tempo." + track.id, tempo);
-    $("tap").textContent = Math.round(bpm) + " BPM";
-  }
-});
-
-let wakeLock = null;
-async function keepAwake() { try { if (!wakeLock && document.visibilityState === "visible") { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => { wakeLock = null; }); } } catch {} }
-$("stage").addEventListener("click", () => {
-  $("app").classList.toggle("kiosk");
-  $("hint").hidden = true;
-  keepAwake();
-  const el = document.documentElement;
-  try { if ($("app").classList.contains("kiosk")) el.requestFullscreen?.().catch(() => {}); else document.exitFullscreen?.().catch(() => {}); } catch {}
-});
-
-/* ---------- Spotify (Authorization Code + PKCE, no server needed) ---------- */
-const status = (m) => { $("status").textContent = m; };
-const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-function randomString(n) { const a = new Uint8Array(n); crypto.getRandomValues(a); return b64url(a).slice(0, n); }
-
-async function login() {
-  const clientId = $("clientId").value.trim();
-  if (!/^[0-9a-f]{32}$/i.test(clientId)) { status("Client ID klopt niet: verwacht 32 tekens (0-9, a-f)."); return; }
-  store.set("clientId", clientId);
-  const verifier = randomString(64);
-  const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
-  store.set("verifier", verifier);
-  // verifier also travels in state, so the exchange works even if iOS lands the redirect in another browser context
-  const p = new URLSearchParams({ response_type: "code", client_id: clientId, scope: SCOPES, redirect_uri: REDIRECT, code_challenge_method: "S256", code_challenge: challenge, state: "web." + verifier });
-  location.href = "https://accounts.spotify.com/authorize?" + p;
-}
-
-async function tokenRequest(body) {
-  const r = await fetch("https://accounts.spotify.com/api/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(body) });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error_description || j.error || ("HTTP " + r.status));
-  const tok = { access: j.access_token, refresh: j.refresh_token || store.get("tok", {}).refresh, exp: Date.now() + (j.expires_in - 60) * 1000 };
-  store.set("tok", tok); return tok;
-}
-async function finishLogin(code, verifier) {
-  const clientId = store.get("clientId");
-  if (!clientId) throw new Error("Client ID ontbreekt. Vul hem in en log opnieuw in.");
-  await tokenRequest({ grant_type: "authorization_code", code, redirect_uri: REDIRECT, client_id: clientId, code_verifier: verifier });
-}
-async function accessToken() {
-  let tok = store.get("tok");
-  if (!tok || !tok.refresh) return null;
-  if (!tok.access || Date.now() > tok.exp) tok = await tokenRequest({ grant_type: "refresh_token", refresh_token: tok.refresh, client_id: store.get("clientId") });
-  return tok.access;
-}
-
-let pollTimer = 0;
-async function poll() {
-  clearTimeout(pollTimer);
-  let wait = 3500;
-  try {
-    if (document.visibilityState === "visible") {
-      const at = await accessToken();
-      if (at) {
-        const r = await fetch("https://api.spotify.com/v1/me/player/currently-playing?additional_types=episode", { headers: { Authorization: "Bearer " + at } });
-        $("led").classList.add("on");
-        if (r.status === 204) { track.playing = false; track.prog = position(); $("title").textContent = "*** NIETS AAN HET SPELEN OP SPOTIFY ***"; }
-        else if (r.status === 401) { const t = store.get("tok", {}); t.exp = 0; store.set("tok", t); wait = 500; }
-        else if (r.status === 429) { wait = (Number(r.headers.get("Retry-After")) || 10) * 1000; }
-        else if (r.ok) {
-          const j = await r.json(); const it = j.item;
-          if (it) await setTrack({
-            id: it.id || it.uri, name: it.name,
-            artists: it.artists ? it.artists.map((a) => a.name).join(", ") : (it.show ? it.show.name : ""),
-            art: (it.album?.images?.[0]?.url) || (it.images?.[0]?.url) || "",
-            dur: it.duration_ms, prog: j.progress_ms || 0, playing: !!j.is_playing
-          });
-        }
-      }
-    }
-  } catch (e) { $("led").classList.remove("on"); status("Spotify: " + e.message); wait = 10000; }
-  pollTimer = setTimeout(poll, wait);
-}
-document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { poll(); keepAwake(); } });
-
-/* settings sheet */
-$("redirect").value = REDIRECT;
-$("clientId").value = store.get("clientId", "");
-$("openSettings").addEventListener("click", () => { $("sheet").hidden = false; });
-$("closeSettings").addEventListener("click", () => { $("sheet").hidden = true; });
-$("sheet").addEventListener("click", (e) => { if (e.target === $("sheet")) $("sheet").hidden = true; });
-$("login").addEventListener("click", login);
-$("logout").addEventListener("click", () => { store.del("tok"); $("led").classList.remove("on"); status("Uitgelogd."); });
-$("copyCode").addEventListener("click", async () => {
-  const tok = store.get("tok"); const cid = store.get("clientId");
-  if (!tok || !tok.refresh) { status("Eerst inloggen, dan kun je de koppelcode kopiëren."); return; }
-  const code = btoa(JSON.stringify({ c: cid, r: tok.refresh }));
-  try { await navigator.clipboard.writeText(code); status("Koppelcode gekopieerd. Plak hem in de app op je beginscherm."); }
-  catch { $("pasteCode").value = code; $("pasteCode").select(); status("Kopiëren lukte niet automatisch: de code staat geselecteerd in het veld hieronder."); }
-});
-$("useCode").addEventListener("click", async () => {
-  try {
-    const { c, r } = JSON.parse(atob($("pasteCode").value.trim()));
-    store.set("clientId", c); $("clientId").value = c;
-    store.set("tok", { refresh: r, access: "", exp: 0 });
-    await accessToken(); status("Gekoppeld met Spotify."); poll();
-  } catch (e) { status("Deze koppelcode werkt niet: " + (e.message || "ongeldig formaat")); }
-});
-
-/* ---------- boot ---------- */
-async function boot() {
-  loadTempo();
-  $("dur").textContent = fmt(track.dur);
-  requestAnimationFrame(frame);
-  const code = qs.get("code"), state = qs.get("state") || "", err = qs.get("error");
-  if (code || err) history.replaceState(null, "", REDIRECT);
-  if (err) { $("sheet").hidden = false; status("Spotify weigerde de login: " + err); }
-  else if (code && state.startsWith("web.")) {
-    try { await finishLogin(code, state.slice(4) || store.get("verifier")); status("Gekoppeld met Spotify."); }
-    catch (e) { $("sheet").hidden = false; status("Inloggen mislukt: " + e.message); }
-  }
-  if (store.get("tok")) poll();
-}
-boot();
-})();
-</script>
+<script type="module" src="js/app.js"></script>
 </body>
 </html>

@@ -1,43 +1,63 @@
-# RetroViz
+# DiggyViz
 
-Retro visualizer (Winamp/Media Player-stijl) die automatisch het nummer oppikt dat je op Spotify speelt.
+Hypnotiserende muziekvisuals die automatisch meebewegen met wat je op Spotify (of Last.fm) speelt.
+Live op **https://myshine-be.github.io/diggyviz/**
 
-- `index.html` – webapp voor je beginscherm (gratis, geen Mac nodig)
+- `index.html` + `js/` + `css/` – de webapp (werkt op iPhone, Android en computer)
 - `ios/` – iPhone-app met zwevend venster (Picture-in-Picture), te bouwen op een Mac
+- `AGENTS.md` – regels voor ChatGPT/Codex/Claude als ze aan dit project werken
 
-Goed om te weten: Spotify geeft geen geluid door aan andere apps. De effecten nemen de kleuren van de albumhoes over en bewegen op een ritme dat aan de positie in het nummer vastzit. Tik 3 keer of meer op de BPM-knop mee op de beat, dan onthoudt hij het tempo voor dat nummer.
+## Visuals
+| Naam | Wat |
+|---|---|
+| Urchin | Bol met honderden stekels die per frequentie uitschieten |
+| Glass Orb | Doorzichtige bol met lijnenpatroon waar golven overheen rollen |
+| Soul Beat | Eerbetoon aan de oude Pioneer-visuals: witte maanschijf met ferrofluid-blob |
+| Chrome | Vloeibaar metaal dat je albumhoes weerspiegelt |
+| Moiré | Draaiende rasters die onmogelijke interferentiepatronen tekenen |
+| Warp | Sterrenveld met hyperspace-sprong bij elk nieuw nummer |
+| Tunnel | Milkdrop-achtige feedbacktunnel |
+| Spectrum | LED-spectrum op een spiegelvloer |
 
----
+Swipe links/rechts om te wisselen, tik op het beeld om de knoppen te verbergen. Met *Auto* wisselt hij elke 45 s en bij elk nieuw nummer.
 
-## Stap 1 – Webpagina online zetten (GitHub Pages)
-
-Beide versies hebben deze pagina nodig, omdat Spotify alleen terugkeert naar een https-adres.
-
-1. Maak op GitHub een nieuwe repository met de naam `diggyviz` (Public).
-2. `index.html` staat al in de hoofdmap van die repo.
-3. Settings → Pages → Source: *Deploy from a branch* → branch `main`, map `/ (root)` → Save.
-4. Na een minuutje staat hij op `https://myshine-be.github.io/diggyviz/`
-
-## Stap 2 – Spotify-app aanmaken
-
-Je hebt Spotify Premium nodig (verplicht sinds februari 2026).
-
-1. Ga naar developer.spotify.com/dashboard en log in.
-2. *Create app*. Naam: RetroViz. Vink **Web API** aan.
-3. Bij **Redirect URIs** zet je exact: `https://myshine-be.github.io/diggyviz/` (met de `/` op het einde).
-4. Opslaan en de **Client ID** kopiëren.
-
-## Stap 3 – Webapp op je iPhone
-
-1. Open https://myshine-be.github.io/diggyviz/ in **Safari**.
-2. Tik op ⚙, plak de Client ID, tik *Inloggen met Spotify*.
-3. Tik in Safari op Deel → *Zet op beginscherm*.
-4. De app op je beginscherm heeft een eigen geheugen. Ga daarom terug naar Safari, ⚙ → *Kopieer koppelcode*. Open de app op je beginscherm, ⚙ → plak de code → *Koppelcode gebruiken*.
-5. Tik op het beeld voor volledig scherm.
+Goed om te weten: Spotify geeft geen geluid door aan andere apps. De visuals nemen de kleuren van de albumhoes over en bewegen op een ritme dat aan de positie in het nummer vastzit. Tik 3 keer of meer op de BPM-knop mee op de beat, dan onthoudt hij het tempo voor dat nummer.
 
 ---
 
-## Stap 4 – iPhone-app met zwevend venster (voor je vriend met de Mac)
+## Verbinden: drie manieren
+
+### Spotify (jij + max. 5 vrienden)
+De Client ID zit ingebouwd, dus gewoon *Spotify* kiezen → inloggen.
+Spotify laat apps in ontwikkelmodus maar 5 gebruikers toe. Jij hebt Spotify Premium nodig (mogelijk ook je vrienden). Een vriend toevoegen:
+1. developer.spotify.com/dashboard → app **RetroViz** → *User Management*.
+2. Vul naam + het e-mailadres van **hun Spotify-account** in → *Add user*.
+
+### Last.fm (iedereen, geen limiet)
+Eenmalig door Mo in te stellen:
+1. Maak een gratis API-account op https://www.last.fm/api/account/create (naam: DiggyViz, callback mag leeg).
+2. Zet de **API key** in `js/config.js` bij `LASTFM_API_KEY` en commit.
+
+Gebruikers doen daarna:
+1. Gratis account op last.fm → Instellingen → *Applications* → *Spotify Scrobbling* → Connect.
+2. In DiggyViz: *Last.fm* kiezen en gebruikersnaam invullen.
+
+Via Last.fm verschijnt een nieuw nummer een paar seconden later en is de voortgangsbalk een schatting.
+
+### Demo
+*Gewoon kijken*: speelt demo-nummers, geen account nodig.
+
+## Op je iPhone als app
+1. Open de site in **Safari** en verbind.
+2. Deel → *Zet op beginscherm*.
+3. Spotify-gebruikers: de app op je beginscherm heeft een eigen geheugen. Ga terug naar Safari → ⚙ → *App op beginscherm koppelen* → *Kopieer koppelcode*, en plak hem in de app op je beginscherm.
+
+## Techniek (GitHub Pages)
+De site wordt geserveerd vanaf de branch `main`, map `/ (root)` (Settings → Pages). Elke push naar `main` staat na ±1 minuut live.
+
+---
+
+## iPhone-app met zwevend venster (voor je vriend met de Mac)
 
 Nodig: een Mac met de nieuwste Xcode (uit de App Store), een USB-kabel en een Apple ID.
 
