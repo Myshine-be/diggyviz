@@ -18,7 +18,7 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
 | `js/engine.js` | WebGL2 renderer: visual → crossfade → bloom → tonemap/grain. Adaptive resolution |
 | `js/glsl.js` | Shared GLSL header (uniforms + helpers) and post-processing shaders |
 | `js/rhythm.js` | Synthetic rhythm (no audio access): kick/snare/hat/energy + 32 bands from song position + BPM |
-| `js/tempo-lookup.js` | Automatic BPM per song from Deezer (JSONP; Spotify ISRC, else artist + title). Cached in `rv.bpm.<id>` |
+| `js/tempo-lookup.js` | Automatic BPM per song from Deezer (sandboxed JSONP; Spotify ISRC, else artist + title). Cached in `rv.bpm.<id>` |
 | `js/listen.js` | Listening mode: microphone → Web Audio → same `audio` fields as rhythm.js (real kicks, tempo). Never records |
 | `js/audio-data.js` | Sound for the shaders: waveform + 2 s spectrum history in one 128×65 texture (`uAudio`). Real from the mic, simulated otherwise |
 | `js/visuals/spectrum-history.js` | Shared GLSL for line visuals: `histShape()`, `beatNow()`, `lineCol()`, `lineAt()`, `ellipseLine()` |
@@ -81,10 +81,18 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
 
 ## Line visuals (Landscape, Halo, Vanish, Orbit)
 Draw the sound itself: `waveAt(x)` (oscilloscope) and `histAt(f, secondsAgo)` / `histShape()` (spectrum history).
-In listening mode this is the real sound (measured: picture follows the microphone within one frame); never draw a
+In listening mode this is measured sound; latency depends on the device and input pipeline. Never draw a
 simulated rhythm on top of it. Keep the newest row/sample on screen.
 Use `ellipseLine()` for circles/ellipses; `lineAt()` caps the slope so steep curves don't leave vertical streaks.
 
 ## Story visuals
 
 `story: true, duration: 120` prevents a track change from interrupting the scene and gives its 90-second reward time to finish. `uSceneTime` counts visible playback seconds with the sheets closed, and `uSceneBeat` integrates the current BPM continuously. Both reset when selecting a different visual; they survive song changes, seeks, resize and WebGL restoration. Use these uniforms instead of song position for character paths and timed surprises. Use `P()` for framing in both orientations.
+
+## Review invariants
+
+- JSONP must remain in an iframe with `sandbox="allow-scripts"` and without `allow-same-origin`. Never execute a third-party tempo script in the page that stores Spotify credentials.
+- Missing or failed tempo lookup must visibly say it is an estimate. A BPM number alone does not prove beat synchronization.
+- Clear waveform/history when changing between measured and simulated audio. Suspended/muted microphone sessions must not reuse frozen analyser samples or silently synthesize a waveform.
+- Story beats use a bounded phase correction, separate from elapsed story time. Bloop's alien arrives once and stays past 120 seconds when Auto is off. Night Drive's convoy repeats every 120 seconds and must fit portrait and landscape.
+- Temporal diagnostics are a low-resolution regression aid, not WCAG/PEAT/Harding certification, a guarantee of comfort, or an iPhone FPS benchmark.

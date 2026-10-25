@@ -197,14 +197,18 @@ function frame(now) {
   const elapsed = Math.max(0, (now - last) / 1000);
   const dt = Math.min(0.1, elapsed); last = now;
   const pos = position();
+  const mode = listener.active ? (listener.receiving ? "mic" : "interrupted") : "simulated";
+  if (mode !== soundMode) {
+    resetAudioData(); soundMode = mode;
+    audio.bands.fill(0); audio.peaks.fill(0);
+    for (const key of ["kick", "snare", "hat", "energy", "level"]) audio[key] = 0;
+  }
   // Listening mode: the microphone's real kicks drive the rhythm (beat phase and tempo). Otherwise the
   // simulated rhythm follows the song position and the tapped / looked-up tempo.
   if (listener.active) listener.analyse(audio, dt);
   else analyse(pos, track.playing, hashStr(track.id || "x"), tempo.bpm, tempo.off, dt);
   const bpmNow = listener.active ? listener.bpm : tempo.bpm;
   // the sound the visuals draw: real waveform + spectrum history from the microphone, else simulated
-  const mode = listener.active ? (listener.receiving ? "mic" : "interrupted") : "simulated";
-  if (mode !== soundMode) { resetAudioData(); soundMode = mode; }
   audioData.live = listener.receiving;
   if (listener.active) { listener.wave(micWave, dt); setWave(micWave); }
   else setWave(synthWave(audio.bands, audio.kick, track.playing ? dt : 0));

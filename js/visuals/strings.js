@@ -43,7 +43,8 @@ void main() {
     float glow = exp(-d * 55.0) * 0.07;
     lines += (core * (i == 0 ? 0.9 : 0.45) + glow) * (0.55 + 0.45 * h);
   }
-  col += lc * lines;
+  // Bound accumulated light: twelve overlapping curves must not become a bright screen wash.
+  col += lc * (1.0 - exp(-lines * 0.5)) * 0.95;
   fragColor = vec4(col, 1.0);
 }
 `,
