@@ -29,7 +29,7 @@ let firstTrack = true;
 let sourceVersion = 0;
 const PUNCH_LEVELS = { rustig: 0.35, normaal: 0.8, explosief: 1.25 };
 let punchLevel = PUNCH_LEVELS[store.get("punch", "explosief")] ? store.get("punch", "explosief") : "explosief";
-const listener = createListener({ onStatus: (m, err) => status(m, err) });
+const listener = createListener({ onStatus: (m, err) => status(m, err), onChange: () => listenChanged() });
 
 function clonePal(p) { return { dark: [...p.dark], mid: [...p.mid], hi: [...p.hi], hot: [...p.hot] }; }
 const position = () => track.playing ? Math.min(track.dur, track.prog + (performance.now() - track.at)) : track.prog;
@@ -212,29 +212,36 @@ function setPunch(level) {
 document.querySelectorAll(".seg button[data-punch]").forEach((b) => b.addEventListener("click", () => setPunch(b.dataset.punch)));
 setPunch(punchLevel);
 
+let listenReq = 0;
+// Keeps button, checkbox, saved choice and BPM label in line with the microphone, whatever stopped or started it.
+function listenChanged() { store.set("listen", listener.active); showListen(); }
 function showListen() {
-  const on = listener.active;
+  const on = listener.active || listener.starting;
   $("listenBtn").setAttribute("aria-pressed", String(on));
   $("listenChk").checked = on;
   if (!on) $("tap").firstChild.nodeValue = Math.round(tempo.bpm) + " ";
 }
 async function setListen(on) {
+  const my = ++listenReq; // only the latest choice may update the screen
   if (on) {
+    const pend = listener.start();
     status("Luisteren… zet de muziek luid genoeg.");
-    if (await listener.start()) status("Luistermodus aan: de visuals volgen nu de echte bass.");
+    showListen();
+    const ok = await pend;
+    if (my !== listenReq) return;
+    if (ok) status("Luistermodus aan: de visuals volgen nu de echte bass.");
   } else { listener.stop(); status("Luistermodus uit."); }
-  store.set("listen", listener.active);
-  showListen();
+  listenChanged();
 }
 $("listenBtn").hidden = !listener.supported;
 $("listenRow").hidden = !listener.supported;
-$("listenBtn").addEventListener("click", (e) => { e.stopPropagation(); setListen(!listener.active); });
+$("listenBtn").addEventListener("click", (e) => { e.stopPropagation(); setListen(!(listener.active || listener.starting)); });
 $("listenChk").addEventListener("change", (e) => setListen(e.target.checked));
 // Browsers only allow the microphone after a tap, so a saved "on" resumes on the first interaction.
 if (listener.supported && store.get("listen", false)) {
   document.addEventListener("pointerdown", function resume(e) {
     document.removeEventListener("pointerdown", resume, true);
-    if (!listener.active && e.target?.id !== "listenBtn" && e.target?.id !== "listenChk") setListen(true);
+    if (!listener.active && !listener.starting && e.target?.id !== "listenBtn" && e.target?.id !== "listenChk") setListen(true);
   }, true);
 }
 $("autoChk").addEventListener("change", (e) => setAuto(e.target.checked));

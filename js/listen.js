@@ -113,43 +113,83 @@ export function processSpectrum(st, spec, dt, out) {
   return out;
 }
 
-/** Microphone + Web Audio wrapper. */
-export function createListener({ onStatus = () => {} } = {}) {
-  let ctx = null, stream = null, an = null, buf = null, st = null;
+/**
+ * Microphone + Web Audio wrapper.
+ * Every start() gets a generation number; stop() bumps it, so a permission prompt that is answered
+ * after the user switched listening off (or started again) is released immediately and never wins.
+ * onChange() fires whenever `active` changes for any reason (start, stop, mic unplugged, context closed).
+ */
+export function createListener({ onStatus = () => {}, onChange = () => {}, media = () => navigator.mediaDevices,
+  AudioCtx = () => window.AudioContext || window.webkitAudioContext, doc = () => (typeof document !== "undefined" ? document : null) } = {}) {
+  let res = null;        // { stream, ctx, an, buf, st } of the running session
+  let pending = null;    // shared promise of the start in progress
+  let gen = 0;
+  const release = (r) => {
+    if (!r) return;
+    try { r.stream?.getTracks().forEach((t) => t.stop()); } catch {}
+    try { if (r.ctx && r.ctx.state !== "closed") r.ctx.close(); } catch {}
+  };
+  const resume = () => { const c = res?.ctx; if (c && c.state !== "running" && c.state !== "closed") c.resume?.().catch(() => {}); };
+  doc()?.addEventListener?.("visibilitychange", () => { if (doc().visibilityState === "visible") resume(); });
+
   const L = {
-    get supported() { return !!(navigator.mediaDevices?.getUserMedia && (window.AudioContext || window.webkitAudioContext)); },
-    get active() { return !!an; },
-    get bpm() { return st?.bpm ?? 120; },
-    async start() {
-      if (an) return true;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
-        ctx = new (window.AudioContext || window.webkitAudioContext)();
-        if (ctx.state === "suspended") await ctx.resume();
-        const srcNode = ctx.createMediaStreamSource(stream);
-        an = ctx.createAnalyser();
-        an.fftSize = 2048; an.smoothingTimeConstant = 0.45; an.minDecibels = -90; an.maxDecibels = -15;
-        srcNode.connect(an); // not connected to the speakers: no echo
-        buf = new Uint8Array(an.frequencyBinCount);
-        st = makeDetector(ctx.sampleRate, an.fftSize);
-        stream.getAudioTracks()[0]?.addEventListener("ended", () => { L.stop(); onStatus("Luisteren gestopt: de microfoon is niet meer beschikbaar.", true); });
-        return true;
-      } catch (e) {
-        L.stop();
-        onStatus(e?.name === "NotAllowedError" ? "Geen toegang tot de microfoon. Sta het toe in de instellingen van je browser." : "Luisteren lukt niet op dit toestel.", true);
-        return false;
-      }
+    get supported() { return !!(media()?.getUserMedia && AudioCtx()); },
+    get active() { return !!res && res.ctx.state !== "closed"; },
+    get starting() { return !!pending; },
+    get bpm() { return res?.st.bpm ?? 120; },
+    start() {
+      if (L.active) return Promise.resolve(true);
+      if (pending) return pending;
+      const my = ++gen;
+      let r = null;
+      pending = (async () => {
+        try {
+          r = { stream: await media().getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }) };
+          if (my !== gen) { release(r); return false; }
+          const Ctx = AudioCtx();
+          r.ctx = new Ctx();
+          if (r.ctx.state === "suspended") await r.ctx.resume();
+          if (my !== gen) { release(r); return false; }
+          const srcNode = r.ctx.createMediaStreamSource(r.stream);
+          r.an = r.ctx.createAnalyser();
+          r.an.fftSize = 2048; r.an.smoothingTimeConstant = 0.45; r.an.minDecibels = -90; r.an.maxDecibels = -15;
+          srcNode.connect(r.an); // not connected to the speakers: no echo
+          r.buf = new Uint8Array(r.an.frequencyBinCount);
+          r.st = makeDetector(r.ctx.sampleRate, r.an.fftSize);
+          r.stream.getAudioTracks()[0]?.addEventListener("ended", () => {
+            if (res !== r) return;
+            L.stop(); onStatus("Luisteren gestopt: de microfoon is niet meer beschikbaar.", true);
+          });
+          r.ctx.addEventListener?.("statechange", () => {
+            if (res !== r) return;
+            if (r.ctx.state === "closed") { L.stop(); onStatus("Luisteren gestopt.", true); }
+            else if (r.ctx.state !== "running") resume(); // iOS "interrupted" (call, Siri) or suspended
+          });
+          res = r;
+          onChange(true);
+          return true;
+        } catch (e) {
+          release(r);
+          if (my === gen) onStatus(e?.name === "NotAllowedError" ? "Geen toegang tot de microfoon. Sta het toe in de instellingen van je browser." : "Luisteren lukt niet op dit toestel.", true);
+          return false;
+        } finally {
+          if (my === gen) pending = null;
+        }
+      })();
+      return pending;
     },
     stop() {
-      try { stream?.getTracks().forEach((t) => t.stop()); } catch {}
-      try { ctx?.close(); } catch {}
-      ctx = stream = an = buf = st = null;
+      const was = !!res; // also true when the context already closed on its own
+      gen++; pending = null;
+      const r = res; res = null;
+      release(r);
+      if (was) onChange(false);
     },
     /** Fill the shared audio object for this frame. */
     analyse(out, dt) {
-      if (!an) return;
-      an.getByteFrequencyData(buf);
-      processSpectrum(st, buf, dt, out);
+      if (!L.active) return;
+      res.an.getByteFrequencyData(res.buf);
+      processSpectrum(res.st, res.buf, dt, out);
     },
   };
   return L;
