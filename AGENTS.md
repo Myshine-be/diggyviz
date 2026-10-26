@@ -20,6 +20,9 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
 | `js/rhythm.js` | Synthetic rhythm (no audio access): kick/snare/hat/energy + 32 bands from song position + BPM |
 | `js/tempo-lookup.js` | Automatic BPM per song from Deezer (sandboxed JSONP; Spotify ISRC, else artist + title). Cached in `rv.bpm.<id>` |
 | `js/listen.js` | Listening mode: microphone → Web Audio → same `audio` fields as rhythm.js (real kicks, tempo). Never records |
+| `js/tab-audio.js` | Tab sound (computer, Chrome/Edge): `getDisplayMedia` audio of e.g. the Spotify web-player tab → same analysis as listen.js (`createListener({ acquire })`). Video track stopped at once |
+| `js/file-player.js` | Own music, like a PSP: plays local files and analyses the same sound (exact beat sync, also headphones/AirPods; analysis delayed by `outputLatency`). Playlist, MediaSession. Source id `file` |
+| `js/id3.js` | Pure ID3v2.3/2.4 reader (title/artist/album/cover) + `parseFileName()` |
 | `js/audio-data.js` | Sound for the shaders: waveform + 2 s spectrum history in one 128×65 texture (`uAudio`). Real from the mic, simulated otherwise |
 | `js/visuals/spectrum-history.js` | Shared GLSL for line visuals: `histShape()`, `beatNow()`, `lineCol()`, `lineAt()`, `ellipseLine()` |
 | `js/palette.js` | Album-art → 4-colour **neon** palette (saturation ≥ 0.85, split-complementary accent) |
@@ -59,6 +62,11 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
 - Output can exceed 1.0; the final pass tone-maps (ACES) and adds bloom, vignette and grain.
 - Use `P()` for coordinates: shorter screen side spans −0.5…0.5, works in portrait and landscape.
 - Anti-alias edges with `fwidth` / `px = 1.5 / min(uRes.x, uRes.y)`.
+
+## Real sound inputs
+`soundInput()` in app.js picks what drives the visuals: own music (source `file`) > tab sound > microphone > simulated rhythm.
+All inputs share `{ supported, active, receiving, bpm, analyse(out, dt), wave(out, dt) }`. Apps cannot read Spotify's
+audio on a phone (iOS sandbox, DRM); only these inputs give true beat sync.
 
 ## Source interface
 `createXSource({ onTrack, onStatus })` → `{ start(), stop() }`.

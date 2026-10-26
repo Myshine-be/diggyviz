@@ -12,6 +12,8 @@ import { createLastfmSource } from "./sources/lastfm.js";
 import { createDemoSource } from "./sources/demo.js";
 import { createTempoLookup } from "./tempo-lookup.js";
 import { createListener } from "./listen.js";
+import { createTabListener } from "./tab-audio.js";
+import { createFilePlayer } from "./file-player.js";
 import { audioData, setWave, feedHistory, synthWave, resetAudioData, WAVE_N } from "./audio-data.js";
 
 if (window.__bridge) throw new Error("iOS bridge redirect");
@@ -33,6 +35,16 @@ const tempoLookup = createTempoLookup({ store });
 let tempoOrigin = "default";
 let tempoAuto = false;   // true while the tempo comes from the Deezer lookup (not tapped)
 const listener = createListener({ onStatus: (m, err) => status(m, err), onChange: () => listenChanged() });
+const tabIn = createTabListener({ onStatus: (m, err) => status(m, err), onChange: () => tabChanged() });
+const player = createFilePlayer({ onStatus: (m, err) => status(m, err), onChange: () => showPlayer() });
+
+// Which real sound drives the visuals right now: own music > shared tab > microphone > none (simulated rhythm).
+function soundInput() {
+  if (sourceName === "file" && player.active) return { kind: "file", io: player };
+  if (tabIn.active) return { kind: "tab", io: tabIn };
+  if (listener.active) return { kind: "mic", io: listener };
+  return null;
+}
 
 function clonePal(p) { return { dark: [...p.dark], mid: [...p.mid], hi: [...p.hi], hot: [...p.hot] }; }
 const position = () => track.playing ? Math.min(track.dur, track.prog + (performance.now() - track.at)) : track.prog;
@@ -84,10 +96,13 @@ function loadTempo(defBpm = 120) {
   showTempo();
 }
 function showTempo() {
-  const mic = listener.active;
-  const source = mic ? (listener.receiving ? "mic" : "interrupted") : tempoOrigin;
-  const labels = { mic: "MIC", interrupted: "WACHT", found: "AUTO", tapped: "BPM", demo: "DEMO", loading: "ZOEK", missing: "SCHAT", unavailable: "SCHAT", default: "SCHAT" };
+  const inp = soundInput();
+  const source = inp ? (inp.io.receiving ? inp.kind : inp.kind === "file" ? "paused" : "interrupted") : tempoOrigin;
+  const labels = { file: "LIVE", tab: "LIVE", paused: "PAUZE", mic: "MIC", interrupted: "WACHT", found: "AUTO", tapped: "BPM", demo: "DEMO", loading: "ZOEK", missing: "SCHAT", unavailable: "SCHAT", default: "SCHAT" };
   const notes = {
+    file: "Eigen muziek: het echte geluid, exact op de beat. Tempo gemeten.",
+    tab: "Tab-geluid: het echte geluid van het tabblad. Tempo gemeten.",
+    paused: "Muziek gepauzeerd.",
     mic: "Microfoon: gemeten geluid; het tempo is een schatting.",
     interrupted: "Microfoon onderbroken. Tik op het scherm om opnieuw te proberen.",
     found: "Tempo via Deezer. Tik mee om de timing bij te stellen; geen geluidsanalyse.",
@@ -97,13 +112,14 @@ function showTempo() {
     unavailable: "Tempo-opzoekdienst niet bereikbaar. 120 BPM is een schatting; tik mee of gebruik de microfoon.",
     default: "120 BPM is een schatting. Tik mee of gebruik de microfoon voor het geluid.",
   };
-  $("tap").firstChild.nodeValue = Math.round(mic ? listener.bpm : tempo.bpm) + " ";
+  $("tap").firstChild.nodeValue = Math.round(inp ? inp.io.bpm : tempo.bpm) + " ";
   $("tap").querySelector("small").textContent = labels[source];
   $("tap").title = notes[source];
   $("tempoStatus").textContent = notes[source];
 }
 function lookupTempo(t) {
   const id = t.id, version = sourceVersion;
+  if (sourceName === "file") return;   // own music: the tempo is measured from the sound itself
   if (t.bpm || tempoOrigin === "tapped" || tempoAuto) return;
   tempoOrigin = "loading"; showTempo();
   tempoLookup.lookup(t).then((bpm) => {
@@ -121,13 +137,25 @@ async function onTrack(t) {
   }
   const version = sourceVersion;
   const changed = t.id !== track.id;
+  // same song, richer details (e.g. own music: the cover and tags arrive a moment after the file starts)
+  const details = !changed && (t.name !== track.name || t.artists !== track.artists || (t.art || "") !== (track.art || ""));
+  const artChanged = changed || (t.art || "") !== (track.art || "");
   Object.assign(track, { id: t.id, name: t.name, artists: t.artists, art: t.art, dur: t.dur || 210000, prog: t.prog || 0, playing: !!t.playing, at: performance.now() });
-  if (!changed) return;
+  if (!changed && !details) return;
 
   $("title").textContent = t.name || "Onbekend nummer";
   $("artist").textContent = t.artists || "";
   $("caption").textContent = (t.name || "").toLowerCase();
   $("art").style.backgroundImage = t.art ? `url("${t.art}")` : "";
+  if (!changed) {
+    if (artChanged && !t.palette) {
+      const { pal, img } = await paletteFrom(t.art);
+      if (sourceVersion !== version || track.id !== t.id) return;
+      palTarget = clonePal(pal); engine?.setArt(img, pal);
+      document.documentElement.style.setProperty("--accent", `rgb(${palTarget.hi.map((v) => v | 0).join(",")})`);
+    }
+    return;
+  }
   loadTempo(t.bpm || 120);
   lookupTempo(t);
   const isFirst = firstTrack;
@@ -155,7 +183,7 @@ function useSource(name) {
   onTrack(null);
   status("");
   sourceName = name; store.set("source", name);
-  $("srcBadge").textContent = name === "lastfm" ? "last.fm" : name;
+  $("srcBadge").textContent = name === "lastfm" ? "last.fm" : name === "file" ? "muziek" : name;
   document.querySelectorAll(".seg button[data-src]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.src === name)));
   document.querySelectorAll("section[data-for]").forEach((s) => { s.hidden = s.dataset.for !== name; });
   track.id = ""; firstTrack = true;
@@ -170,11 +198,16 @@ function useSource(name) {
     const user = store.get("lfUser", "");
     if (!user) { status("Vul je Last.fm-gebruikersnaam in via ⚙"); source = createDemoSource({ onTrack, onStatus: () => {} }); }
     else source = createLastfmSource({ user, ...cb });
+  } else if (name === "file") {
+    player.setTrackListener(cb.onTrack);
+    source = player;
+    if (!player.hasMusic) status("Kies je muziek met 'Muziek kiezen'.");
   } else {
     source = createDemoSource(cb);
   }
   source.start();
   refreshSpotifyState();
+  showPlayer();
 }
 
 async function startLogin() {
@@ -197,7 +230,8 @@ function frame(now) {
   const elapsed = Math.max(0, (now - last) / 1000);
   const dt = Math.min(0.1, elapsed); last = now;
   const pos = position();
-  const mode = listener.active ? (listener.receiving ? "mic" : "interrupted") : "simulated";
+  const inp = soundInput();
+  const mode = inp ? inp.kind + (inp.io.receiving ? "" : "-idle") : "simulated";
   if (mode !== soundMode) {
     resetAudioData(); soundMode = mode;
     audio.bands.fill(0); audio.peaks.fill(0);
@@ -205,15 +239,15 @@ function frame(now) {
   }
   // Listening mode: the microphone's real kicks drive the rhythm (beat phase and tempo). Otherwise the
   // simulated rhythm follows the song position and the tapped / looked-up tempo.
-  if (listener.active) listener.analyse(audio, dt);
+  if (inp) inp.io.analyse(audio, dt);
   else analyse(pos, track.playing, hashStr(track.id || "x"), tempo.bpm, tempo.off, dt);
-  const bpmNow = listener.active ? listener.bpm : tempo.bpm;
+  const bpmNow = inp ? inp.io.bpm : tempo.bpm;
   // the sound the visuals draw: real waveform + spectrum history from the microphone, else simulated
-  audioData.live = listener.receiving;
-  if (listener.active) { listener.wave(micWave, dt); setWave(micWave); }
+  audioData.live = !!inp && inp.io.receiving;
+  if (inp) { inp.io.wave(micWave, dt); setWave(micWave); }
   else setWave(synthWave(audio.bands, audio.kick, track.playing ? dt : 0));
   feedHistory(audio.bands, dt);
-  if (listener.active && now - lastBpmShown > 1000) { lastBpmShown = now; showTempo(); }
+  if (inp && now - lastBpmShown > 1000) { lastBpmShown = now; showTempo(); }
   drop = Math.max(0, drop - dt * 0.7);
   const k = 1 - Math.exp(-dt * 2.2);
   for (const key of ["dark", "mid", "hi", "hot"]) for (let i = 0; i < 3; i++) palCur[key][i] += (palTarget[key][i] - palCur[key][i]) * k;
@@ -300,6 +334,56 @@ if (listener.supported && store.get("listen", false)) {
 }
 $("autoChk").addEventListener("change", (e) => setAuto(e.target.checked));
 
+/* own music (like a PSP): DiggyViz plays the files and analyses the same sound */
+function showPlayer() {
+  const on = sourceName === "file";
+  $("playerCtl").hidden = !on;
+  $("playBtn").textContent = player.playing ? "⏸" : "▶";
+  $("playBtn").setAttribute("aria-label", player.playing ? "Pauzeren" : "Afspelen");
+  $("prevBtn").disabled = $("nextBtn").disabled = $("playBtn").disabled = !player.hasMusic;
+  document.querySelector("#trackPill .progress")?.classList.toggle("seekable", on && player.hasMusic);
+  showTempo();
+}
+function pickMusic() { $("fileInput").click(); }   // must run inside the tap itself (browser rule)
+$("fileInput").addEventListener("change", async (e) => {
+  const files = [...e.target.files];
+  e.target.value = "";
+  if (!files.length) return;
+  if (sourceName !== "file") useSource("file");
+  if (await player.load(files)) { $("settings").hidden = true; wake(); }
+  showPlayer();
+});
+for (const id of ["pickBtn", "pickBtn2"]) $(id).addEventListener("click", (e) => { e.stopPropagation(); pickMusic(); });
+$("playBtn").addEventListener("click", (e) => { e.stopPropagation(); player.toggle().finally(showPlayer); });
+$("nextBtn").addEventListener("click", (e) => { e.stopPropagation(); player.next(); });
+$("prevBtn").addEventListener("click", (e) => { e.stopPropagation(); player.prev(); });
+document.querySelector("#trackPill .progress")?.addEventListener("click", (e) => {
+  if (sourceName !== "file" || !player.hasMusic) return;
+  const r = e.currentTarget.getBoundingClientRect();
+  player.seek((e.clientX - r.left) / r.width);
+});
+
+/* tab sound (computer): analyse the audio of the Spotify web-player tab */
+function tabChanged() {
+  const on = tabIn.active || tabIn.starting;
+  $("tabBtn").setAttribute("aria-pressed", String(on));
+  $("tabChk").checked = on;
+  showTempo();
+}
+async function setTab(on) {
+  if (on) {
+    const pend = tabIn.start();            // first: the share prompt needs the tap that started it
+    status("Kies het Spotify-tabblad en zet 'Tabblad-audio delen' aan.");
+    tabChanged();
+    if (await pend) status("Tab-geluid aan: de visuals volgen het echte geluid van het tabblad.");
+  } else { tabIn.stop(); status("Tab-geluid uit."); }
+  tabChanged();
+}
+$("tabBtn").hidden = !tabIn.supported;
+$("tabRow").hidden = !tabIn.supported;
+$("tabBtn").addEventListener("click", (e) => { e.stopPropagation(); setTab(!(tabIn.active || tabIn.starting)); });
+$("tabChk").addEventListener("change", (e) => setTab(e.target.checked));
+
 const canFs = !!document.documentElement.requestFullscreen;
 $("fsBtn").hidden = !canFs;
 $("fsBtn").addEventListener("click", () => {
@@ -323,6 +407,7 @@ $("viz").addEventListener("touchend", (e) => {
 $("viz").addEventListener("click", () => { if (app.classList.contains("idle")) wake(); else { clearTimeout(idleTimer); app.classList.add("idle"); } keepAwake(); });
 document.addEventListener("keydown", (e) => {
   if (e.target.tagName === "INPUT") return;
+  if (e.key === " " && sourceName === "file" && player.hasMusic) { e.preventDefault(); player.toggle().finally(showPlayer); return; }
   if (e.key === "ArrowRight") stepVisual(1);
   else if (e.key === "ArrowLeft") stepVisual(-1);
   else if (e.key === "t") $("tap").click();
@@ -342,7 +427,8 @@ document.querySelectorAll(".seg button[data-src]").forEach((b) => b.addEventList
 document.querySelectorAll(".choice").forEach((b) => b.addEventListener("click", () => {
   $("onboard").hidden = true;
   useSource(b.dataset.pick);
-  if (b.dataset.pick === "spotify" && !spotify.isLoggedIn()) startLogin();
+  if (b.dataset.pick === "file") pickMusic();
+  else if (b.dataset.pick === "spotify" && !spotify.isLoggedIn()) startLogin();
   else if (b.dataset.pick === "lastfm" && !store.get("lfUser")) { $("settings").hidden = false; $("lfUser").focus(); }
   else wake();
 }));
@@ -388,4 +474,4 @@ $("version").textContent = "DiggyViz " + CONFIG.VERSION;
 })();
 
 // test/debug hook
-window.diggy = { setVisual, stepVisual, get engine() { return engine; }, onTrack, useSource, audio, setListen, get listening() { return listener.active; }, get tempo() { return { ...tempo, auto: tempoAuto }; } };
+window.diggy = { player, tabIn, get soundInput() { return soundInput()?.kind ?? null; }, setVisual, stepVisual, get engine() { return engine; }, onTrack, useSource, audio, setListen, get listening() { return listener.active; }, get tempo() { return { ...tempo, auto: tempoAuto }; } };

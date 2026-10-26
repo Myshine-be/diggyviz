@@ -116,7 +116,7 @@ section h3 { margin-bottom: 0; }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
 .field { display: flex; flex-direction: column; gap: 6px; font: 600 11px var(--f-label); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
 .field input { font: 16px var(--f-mono); color: var(--ink); background: rgba(0,0,0,0.35); border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; text-transform: none; letter-spacing: 0; }
-.seg { display: grid; grid-template-columns: repeat(3, 1fr); background: rgba(255,255,255,0.05); border: 1px solid var(--line); border-radius: 12px; padding: 3px; gap: 3px; }
+.seg { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); background: rgba(255,255,255,0.05); border: 1px solid var(--line); border-radius: 12px; padding: 3px; gap: 3px; }
 .seg button { border: 0; background: transparent; padding: 10px 6px; border-radius: 9px; font: 600 12px var(--f-label); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-2); }
 .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 details { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; }
@@ -133,3 +133,8 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* listening mode */
 #listenRow:not([hidden]) { display: flex; flex-direction: column; gap: 10px; }
+
+/* own-music transport: a compact row above the main controls */
+.controls.player .ctl { min-width: 46px; font-size: 15px; letter-spacing: 0; }
+.controls.player #pickBtn { font-size: 12px; letter-spacing: 0.14em; }
+.progress.seekable { cursor: pointer; height: 4px; }

@@ -139,8 +139,19 @@ export function waveFrom(samples, out, gain = { peak: 0.02 }, dt = 1 / 60) {
  * after the user switched listening off (or started again) is released immediately and never wins.
  * onChange() fires whenever `active` changes for any reason (start, stop, mic unplugged, context closed).
  */
+const MIC_MESSAGES = {
+  failed: (e) => e?.name === "NotAllowedError" ? "Geen toegang tot de microfoon. Sta het toe in de instellingen van je browser." : "Luisteren lukt niet op dit toestel.",
+  ended: "Luisteren gestopt: de microfoon is niet meer beschikbaar.",
+};
+
+/**
+ * `acquire` returns the MediaStream to analyse (default: the microphone). Other inputs, such as a shared
+ * browser tab (js/tab-audio.js), reuse the exact same analysis by passing their own acquire/isSupported/messages.
+ */
 export function createListener({ onStatus = () => {}, onChange = () => {}, media = () => navigator.mediaDevices,
-  AudioCtx = () => window.AudioContext || window.webkitAudioContext, doc = () => (typeof document !== "undefined" ? document : null) } = {}) {
+  AudioCtx = () => window.AudioContext || window.webkitAudioContext, doc = () => (typeof document !== "undefined" ? document : null),
+  acquire = () => media().getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }),
+  isSupported = () => !!media()?.getUserMedia, messages = MIC_MESSAGES } = {}) {
   let res = null;        // { stream, ctx, an, buf, st } of the running session
   let pending = null;    // shared promise of the start in progress
   let gen = 0;
@@ -155,7 +166,7 @@ export function createListener({ onStatus = () => {}, onChange = () => {}, media
   doc()?.addEventListener?.("pointerdown", resume, { passive: true });
 
   const L = {
-    get supported() { return !!(media()?.getUserMedia && AudioCtx()); },
+    get supported() { return !!(isSupported() && AudioCtx()); },
     get active() { return !!res && res.ctx.state !== "closed"; },
     get receiving() { return !!res && res.ctx.state === "running" && !res.stream.getAudioTracks()[0]?.muted; },
     get starting() { return !!pending; },
@@ -167,7 +178,7 @@ export function createListener({ onStatus = () => {}, onChange = () => {}, media
       let r = null;
       const attempt = (async () => {
         try {
-          r = { stream: await media().getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }) };
+          r = { stream: await acquire() };
           if (my !== gen) { release(r); return false; }
           const Ctx = AudioCtx();
           r.ctx = new Ctx();
@@ -182,7 +193,7 @@ export function createListener({ onStatus = () => {}, onChange = () => {}, media
           r.st = makeDetector(r.ctx.sampleRate, r.an.fftSize);
           r.stream.getAudioTracks()[0]?.addEventListener("ended", () => {
             if (res !== r) return;
-            L.stop(); onStatus("Luisteren gestopt: de microfoon is niet meer beschikbaar.", true);
+            L.stop(); onStatus(messages.ended, true);
           });
           r.ctx.addEventListener?.("statechange", () => {
             if (res !== r) return;
@@ -194,7 +205,7 @@ export function createListener({ onStatus = () => {}, onChange = () => {}, media
           return true;
         } catch (e) {
           release(r);
-          if (my === gen) onStatus(e?.name === "NotAllowedError" ? "Geen toegang tot de microfoon. Sta het toe in de instellingen van je browser." : "Luisteren lukt niet op dit toestel.", true);
+          if (my === gen) onStatus(messages.failed(e), true);
           return false;
         }
       })();

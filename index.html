@@ -51,10 +51,17 @@
   <footer class="hud hud-bottom">
     <div class="status" id="status" role="status"></div>
     <nav class="chips" id="chips" aria-label="Visuals"></nav>
+    <div class="controls player" id="playerCtl" hidden>
+      <button class="ctl" id="prevBtn" aria-label="Vorig nummer">⏮</button>
+      <button class="ctl" id="playBtn" aria-label="Afspelen">▶</button>
+      <button class="ctl" id="nextBtn" aria-label="Volgend nummer">⏭</button>
+      <button class="ctl" id="pickBtn">Muziek kiezen</button>
+    </div>
     <div class="controls">
       <button class="ctl tap" id="tap" aria-label="Tik mee op de beat">120 <small>BPM</small></button>
       <button class="ctl" id="autoBtn" aria-pressed="true">Auto</button>
       <button class="ctl" id="listenBtn" aria-pressed="false" aria-label="Luistermodus: de microfoon hoort de echte beat">🎤 Luister</button>
+      <button class="ctl" id="tabBtn" aria-pressed="false" hidden aria-label="Tab-geluid: analyseer het geluid van het Spotify-tabblad">🖥 Tab-geluid</button>
       <button class="ctl" id="fsBtn">Volledig scherm</button>
     </div>
   </footer>
@@ -68,6 +75,7 @@
     <div class="choices">
       <button class="choice" data-pick="spotify"><b>Spotify</b><span>Inloggen met je Spotify-account. Voor jou en vrienden die je toevoegt.</span></button>
       <button class="choice" data-pick="lastfm"><b>Last.fm</b><span>Voor iedereen. Alleen je Last.fm-gebruikersnaam, Spotify moet daaraan gekoppeld zijn.</span></button>
+      <button class="choice" data-pick="file"><b>Eigen muziek</b><span>Speel muziekbestanden af in DiggyViz, zoals op een PSP: altijd exact op de beat, ook met koptelefoon.</span></button>
       <button class="choice" data-pick="demo"><b>Gewoon kijken</b><span>Bewegende visuals zonder geluid, geen account nodig.</span></button>
     </div>
   </div>
@@ -87,6 +95,7 @@
       <div class="seg" role="group" aria-label="Bron">
         <button data-src="spotify">Spotify</button>
         <button data-src="lastfm">Last.fm</button>
+        <button data-src="file">Muziek</button>
         <button data-src="demo">Demo</button>
       </div>
     </section>
@@ -109,6 +118,13 @@
       </details>
     </section>
 
+    <section data-for="file">
+      <h3>Eigen muziek</h3>
+      <p class="note">DiggyViz speelt je muziekbestanden (MP3, M4A, WAV, AAC, FLAC) af en ziet hetzelfde geluid dat je hoort. Daardoor is alles exact op de beat, ook met een koptelefoon of AirPods. Titel, artiest en hoes komen uit het bestand. Je bestanden blijven op je toestel.</p>
+      <div class="row"><button class="btn primary" id="pickBtn2">Muziek kiezen</button></div>
+      <p class="note">Spotify-nummers kunnen hier niet: die zijn beveiligd. Op een computer kan wél: zie Tab-geluid hieronder.</p>
+    </section>
+
     <section data-for="lastfm">
       <h3>Last.fm</h3>
       <label class="field">Gebruikersnaam<input id="lfUser" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="bv. mo_be"></label>
@@ -124,6 +140,10 @@
         <label class="switch"><input type="checkbox" id="listenChk"> Luistermodus (microfoon): reageer op het geluid</label>
         <p class="note">De microfoon hoort de muziek in de kamer en schat de beat en het tempo. Herkenning kan afwijken bij achtergrondgeluid of ingewikkelde ritmes. Het geluid blijft op je toestel: niets wordt opgenomen of verstuurd. Werkt het best als de muziek uit een box of tv komt.</p>
       </div>
+      <div id="tabRow" hidden>
+        <label class="switch"><input type="checkbox" id="tabChk"> Tab-geluid (computer): analyseer het geluid van een tabblad</label>
+        <p class="note">Open Spotify in een ander Chrome-tabblad (open.spotify.com) en speel een nummer. Zet dan Tab-geluid aan, kies dat tabblad en zet <b>Tabblad-audio delen</b> aan. DiggyViz ziet nu exact wat je hoort, ook via een koptelefoon. Er wordt niets opgenomen.</p>
+      </div>
       <p class="note">Zonder luistermodus volgt het ritme de positie in het nummer. Het tempo wordt per nummer automatisch opgezocht (BPM-knop toont dan AUTO); tik 1× op de beat om de timing bij te stellen, of 3× of meer om zelf het tempo te tikken. Spotify en Last.fm leveren zelf geen geluidsanalyse. Bij Last.fm is de afspeelpositie geschat.</p>
       <p class="note">Night Drive en Bloop hebben na 90 seconden kijken een verrassing. Met Auto uit blijft de alien Bloop achtervolgen tot je van visual wisselt. Hun verhaal loopt door bij een nieuw nummer; pauze en achtergrondtijd tellen niet mee.</p>
       <p class="note">Swipe links of rechts over het beeld om te wisselen. Tik op het beeld om de knoppen te verbergen. Tik op BPM mee op de beat: 1× zet de timing, 3× of meer zet ook het tempo, per nummer onthouden.</p>
@@ -133,6 +153,7 @@
   </div>
 </div>
 
+<input type="file" id="fileInput" accept="audio/*,.mp3,.m4a,.aac,.wav,.flac,.ogg,.opus,.aif,.aiff" multiple hidden>
 <script type="module" src="js/app.js"></script>
 </body>
 </html>
