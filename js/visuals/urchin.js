@@ -95,7 +95,7 @@ vec3 calcNormal(vec3 p) {
 
 void main() {
   vec2 p = P();
-  R = 0.46 + uKick * 0.05 + uDrop * 0.05;
+  R = 0.46 + min(0.08, uKick * 0.03 + uDrop * 0.05);
   // Max extent is R(0.54) + L(0.86) = 1.40; with a 0.37 half-FOV tangent that fits the
   // portrait width from distance >= 4.03. 4.05 keeps the orb as large as possible.
   vec3 ro = vec3(0.0, 0.0, 4.05);
@@ -114,7 +114,7 @@ void main() {
     float t = max(0.0, -b - sqrt(h)), tmax = -b + sqrt(h);
     float d = 1.0; int i;
     bool hit = false;
-    for (i = 0; i < 140; i++) {
+    for (i = 0; i < 110; i++) {
       vec3 pos = ro + rd * t;
       d = map(pos);
       glow += exp(-d * 28.0) * (0.15 + 0.85 * gTip) * (0.012 + 0.02 * kickSel(gId) * uKick);
@@ -131,7 +131,7 @@ void main() {
       vec3 l1 = normalize(o * vec3(0.6, 0.8, 0.6));
       float dif = clamp(dot(n, l1), 0.0, 1.0);
       float rim = pow(1.0 - clamp(dot(n, -rd), 0.0, 1.0), 3.0);
-      float ao = 1.0 - float(i) / 140.0;
+      float ao = 1.0 - float(i) / 110.0;
       vec3 base = mix(uPal[0] * 0.4 + 0.01, uPal[1] * 0.75, smoothstep(0.0, 0.9, tip));
       col = base * (0.1 + 0.85 * dif) * (0.35 + 0.65 * ao);
       col += mix(uPal[1], uPal[2], 0.25) * pow(tip, 3.0) * (0.35 + 0.75 * uEnergy + 0.35 * uKick);

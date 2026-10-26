@@ -183,9 +183,6 @@ export class Engine {
       u.tex("uScene", this.mixT.tex, 0); u.tex("uBloom", this.bloomA.tex, 1);
       u.f("uBloomAmt", bloomAmt); u.f("uTime", f.time); u.f("uGrain", 0.035);
       u.f("uGrade", (this.cur.vis.grade ?? 1) * ease + (this.old ? (this.old.vis.grade ?? 1) * (1 - ease) : 0));
-      // global punch on every visual (per visual: punch, default 1)
-      const punch = (this.cur.vis.punch ?? 1) * ease + (this.old ? (this.old.vis.punch ?? 1) * (1 - ease) : 0);
-      u.f("uPunchKick", punch * (f.audio.kick ?? 0)); u.f("uPunchSnare", punch * (f.audio.snare ?? 0));
     });
   }
 

@@ -1,3 +1,9 @@
+# Afgewerkt door Codex — 26 oktober 2026
+
+De oorspronkelijke overdracht hieronder beschrijft de WIP op `9b77f3d`; die wijzigingen waren al gecommit. Zie `docs/afronding-2.5.md` voor de afwerking en testgrenzen.
+
+---
+
 # Overdracht DiggyViz 2.5 – stand van zaken (26 okt 2026, 17:05)
 
 Dit verslag is voor wie het werk afmaakt, bijvoorbeeld ChatGPT/Codex. Lees ook `AGENTS.md` voor de regels van het project.

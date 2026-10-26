@@ -370,12 +370,18 @@ function tabChanged() {
   $("tabChk").checked = on;
   showTempo();
 }
+let tabReq = 0;
 async function setTab(on) {
+  const request = ++tabReq;
   if (on) {
     const pend = tabIn.start();            // first: the share prompt needs the tap that started it
     status("Kies het Spotify-tabblad en zet 'Tabblad-audio delen' aan.");
     tabChanged();
-    if (await pend) status("Tab-geluid aan: de visuals volgen het echte geluid van het tabblad.");
+    const ok = await pend;
+    if (request !== tabReq) return;
+    if (ok) status(tabIn.usesHelper
+      ? "Tab-geluid aan. Het kleine DiggyViz-venstertje mag je minimaliseren, maar niet sluiten."
+      : "Tab-geluid aan. Tip: sta pop-ups toe voor DiggyViz om de deling vanuit een hulpvenster te starten.");
   } else { tabIn.stop(); status("Tab-geluid uit."); }
   tabChanged();
 }

@@ -45,8 +45,8 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
    ```
 2. Import it in `js/visuals/index.js` and add it to `VISUALS`.
 3. The shader gets everything in `js/glsl.js` HEADER: `uSceneTime, uSceneBeat, uTime, uSongTime, uBeat, uKick, uSnare, uHat,
-   uEnergy, uLevel, uDrop, uTravel, uSeed, uBands[32], uPeaks[32], uPal[4], uPrev, uArt` and helpers
-   `P(), rot(), smin(), hash*, noise2/3, fbm2, band(x), peak(x), pal(t), wave(x), gridLine(x,w)`.
+   uEnergy, uLevel, uDrop, uTravel, uSeed, uBands[32], uPeaks[32], uFlux[32], uHit, uKickN, uSnareN, uPal[4], uPrev, uArt` and helpers
+   `P(), rot(), smin(), hash*, noise2/3, fbm2, band(x), peak(x), flux(x), pal(t), wave(x), gridLine(x,w)`.
    Do not redeclare these.
 
 ## Shader rules
@@ -109,3 +109,10 @@ Use `ellipseLine()` for circles/ellipses; `lineAt()` caps the slope so steep cur
 - Clear waveform/history when changing between measured and simulated audio. Suspended/muted microphone sessions must not reuse frozen analyser samples or silently synthesize a waveform.
 - Story beats use a bounded phase correction, separate from elapsed story time. Bloop's alien arrives once and stays past 120 seconds when Auto is off. Night Drive's convoy repeats every 120 seconds and must fit portrait and landscape.
 - Temporal diagnostics are a low-resolution regression aid, not WCAG/PEAT/Harding certification, a guarantee of comfort, or an iPhone FPS benchmark.
+
+## 2.5 onsets and helper window
+
+- `flux(x)` is a per-frequency onset envelope: sustained tones settle; new notes briefly rise. `uHit` is the strongest kick/clap/onset, bounded 0..1. `uKickN` and `uSnareN` count detected hits; hash them with an object id to choose a different local group each time. Detection remains approximate.
+- Strong responses belong to individual spikes, ridges, rings or particles. There is deliberately no global `punch` property: the unfinished 2.5 global zoom/exposure/bloom-flash proposal conflicts with the existing no-screen-flash rule and was removed.
+- Tab audio first opens a same-origin helper synchronously from a user tap. It requests the share, optionally after a second click inside the helper. The main window analyses its audio-only stream. A blocked popup falls back to the main-window picker.
+- Keep the helper open or minimized during playback. Closing it stops audio. Pending pickers, aborted starts, duplicate clicks, late streams and all polls/listeners must be cleaned up. Never suppress browser permission dialogs or promise that all browser-owned sharing indicators disappear; their placement depends on Chrome/Edge.

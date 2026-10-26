@@ -66,36 +66,51 @@ const needsTap = (e) => e?.name === "InvalidStateError" || /activation|gesture/i
  * Ask for the share from the helper window `w`, so Chrome's share bar lands there. If the browser wants a
  * tap inside that window first, show a button there and wait for it.
  */
-export async function acquireViaHelper(w) {
-  const md = () => w.navigator.mediaDevices;
-  const el = (id) => { try { return w.document.getElementById(id); } catch { return null; } };
-  const done = (text) => { const m = el("msg"); if (m) m.textContent = text; const g = el("go"); if (g) g.hidden = true; };
-  let stream;
-  try {
-    stream = await md().getDisplayMedia(SHARE_OPTIONS);
-  } catch (e) {
-    if (!needsTap(e)) throw e;
-    stream = await new Promise((resolve, reject) => {
-      const go = el("go");
-      if (!go) { reject(e); return; }
-      go.hidden = false;
-      try { w.focus(); } catch {}
-      go.addEventListener("click", () => { md().getDisplayMedia(SHARE_OPTIONS).then(resolve, reject); });
-      const watch = setInterval(() => { if (w.closed) { clearInterval(watch); const c = new Error("Hulpvenster gesloten"); c.name = "HelperClosed"; reject(c); } }, 400);
-      const stopWatch = () => clearInterval(watch);
-      Promise.resolve().then(() => {}).finally(() => {});
-      resolve.__stop = stopWatch;
-    }).finally(() => {});
-  }
-  const s = audioOnly(stream);
-  done("Klaar! Je mag dit venstertje minimaliseren, maar sluit het niet: dan stopt het tabgeluid.");
-  return s;
+export function acquireViaHelper(w, { signal, every = setInterval, cancel = clearInterval } = {}) {
+  return new Promise((resolve, reject) => {
+    let settled = false, busy = false, watch;
+    const el = id => { try { return w.document.getElementById(id); } catch { return null; } };
+    const go = el("go");
+    const closedError = () => Object.assign(new Error("Hulpvenster gesloten"), { name: "HelperClosed" });
+    const closed = () => { try { return w.closed; } catch { return true; } };
+    const cleanup = () => { cancel(watch); go?.removeEventListener("click", ask); signal?.removeEventListener("abort", abort); };
+    const finish = (fn, value) => { if (settled) return; settled = true; cleanup(); fn(value); };
+    const abort = () => finish(reject, closedError());
+    async function ask() {
+      if (settled || busy) return;
+      if (closed() || signal?.aborted) { abort(); return; }
+      busy = true; if (go) go.disabled = true;
+      try {
+        const stream = await w.navigator.mediaDevices.getDisplayMedia(SHARE_OPTIONS);
+        if (settled || closed() || signal?.aborted) {
+          stream.getTracks().forEach(t => t.stop()); abort(); return;
+        }
+        const sound = audioOnly(stream);
+        const msg = el("msg");
+        if (msg) msg.textContent = "Klaar! Minimaliseren mag. Sluit dit venster om het tabgeluid te stoppen.";
+        if (go) go.hidden = true;
+        finish(resolve, sound);
+      } catch (e) {
+        if (settled) return;
+        if (needsTap(e) && go) {
+          go.hidden = false; go.disabled = false;
+          try { w.focus(); } catch {}
+        } else finish(reject, e);
+      } finally { busy = false; }
+    }
+    if (closed() || signal?.aborted) { abort(); return; }
+    signal?.addEventListener("abort", abort, { once: true });
+    go?.addEventListener("click", ask);
+    watch = every(() => { if (closed()) abort(); }, 400);
+    ask();
+  });
 }
 
 export function createTabListener({ onStatus = () => {}, onChange = () => {}, media = () => navigator.mediaDevices,
   open = () => openHelper(), ...rest } = {}) {
-  let helper = null, watch = 0, usedHelper = false;
+  let helper = null, watch = 0, usedHelper = false, controller = null;
   const closeHelper = () => {
+    controller?.abort(); controller = null;
     clearInterval(watch); watch = 0;
     const w = helper; helper = null;
     try { if (w && !w.closed) w.close(); } catch {}
@@ -109,7 +124,12 @@ export function createTabListener({ onStatus = () => {}, onChange = () => {}, me
       if (!w) return acquireTabAudio(media);
       helper = w;
       try {
-        const stream = await acquireViaHelper(w);
+        const request = new AbortController(); controller = request;
+        const stream = await acquireViaHelper(w, { signal: request.signal });
+        if (helper !== w || request.signal.aborted) {
+          stream.getTracks().forEach(t => t.stop());
+          throw Object.assign(new Error("Verouderde aanvraag"), { name: "HelperClosed" });
+        }
         // closing the helper ends its share: stop listening with a clear message
         watch = setInterval(() => {
           let closed = true; try { closed = w.closed; } catch {}
@@ -124,6 +144,13 @@ export function createTabListener({ onStatus = () => {}, onChange = () => {}, me
     isSupported: () => !!media()?.getDisplayMedia && !isIOS(),
     messages: TAB_MESSAGES,
   });
+  const start = L.start;
+  L.start = () => {
+    const attempt = start();
+    // Also close the helper if Web Audio setup fails after the share was acquired.
+    attempt.then(ok => { if (!ok && !L.active && !L.starting) closeHelper(); });
+    return attempt;
+  };
   const stop = L.stop;
   L.stop = () => { stop(); closeHelper(); };
   Object.defineProperty(L, "usesHelper", { get: () => usedHelper });
