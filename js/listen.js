@@ -1,3 +1,4 @@
+import { envelope } from "./envelope.js";
 // Listening mode: the microphone hears the music in the room, so bass is real.
 // Sound stays on the device: it is analysed live and never recorded or sent.
 // Pure analysis lives in makeDetector()/processSpectrum() so it can be tested without Web Audio.
@@ -49,10 +50,7 @@ export function processSpectrum(st, spec, dt, out) {
     const v = avgBins(spec, a, b);
     st.bandMax[i] = Math.max(v, st.bandMax[i] - dt * 0.05, 0.04);   // low floor: quiet rooms / far microphones still fill the range
     const target = clamp(v / st.bandMax[i]) * (1 - (i / st.nb) * 0.25);
-    const cur = out.bands[i];
-    out.bands[i] = target > cur ? target : Math.max(target, cur - 2.4 * dt);
-    out.peaks[i] = Math.max(out.peaks[i] - 0.48 * dt, out.bands[i]);
-    sum += out.bands[i];
+    sum += envelope(out.bands, out.peaks, i, target, dt);
   }
 
   // bass level, normalised between a slow floor and a slow-falling maximum

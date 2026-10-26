@@ -66,3 +66,34 @@ export function synthWave(bands, kick, dt, out = synth) {
   for (let i = 0; i < WAVE_N; i++) out[i] *= g;
   return out;
 }
+
+/**
+ * Smooth view of the spectrum history for organic line visuals (uniform uHistS, sampled with histSmooth()).
+ * out: 64 bands x 64 rows (Uint8Array 4096), row 0 = newest. Bands are upsampled 32 → 64 with Catmull-Rom
+ * and both axes get a gentle 1-2-1 blur, so curves have no corners and rows have no steps. Linear texture
+ * filtering plus uHistFrac (sub-row time) then makes the scroll continuous at any display refresh rate.
+ */
+const tmp = new Float32Array(64 * 64);
+export function buildSmoothHistory(data = audioData, out = new Uint8Array(64 * 64)) {
+  const b = data.bytes;
+  for (let r = 0; r < HIST_ROWS; r++) {
+    const o = (((data.head - r) % HIST_ROWS + HIST_ROWS) % HIST_ROWS + 1) * WAVE_N;
+    for (let j = 0; j < 64; j++) {
+      const x = (j / 63) * (NB - 1), i = Math.floor(x), t = x - i;
+      const p0 = b[o + Math.max(0, i - 1)], p1 = b[o + i], p2 = b[o + Math.min(NB - 1, i + 1)], p3 = b[o + Math.min(NB - 1, i + 2)];
+      const v = 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t);
+      tmp[r * 64 + j] = v;
+    }
+  }
+  for (let r = 0; r < 64; r++) {
+    const ra = Math.max(0, r - 1), rb = Math.min(63, r + 1);
+    for (let j = 0; j < 64; j++) {
+      const ja = Math.max(0, j - 1), jb = Math.min(63, j + 1);
+      const freq = (tmp[r * 64 + ja] + 2 * tmp[r * 64 + j] + tmp[r * 64 + jb]) * 0.25;
+      const time = (tmp[ra * 64 + j] + 2 * tmp[r * 64 + j] + tmp[rb * 64 + j]) * 0.25;
+      const v = r === 0 ? freq : (freq + time) * 0.5;   // the newest row is not blurred back in time
+      out[r * 64 + j] = v < 0 ? 0 : v > 255 ? 255 : Math.round(v);
+    }
+  }
+  return out;
+}

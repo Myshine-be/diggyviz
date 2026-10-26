@@ -15,14 +15,15 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
 | `index.html` | UI shell + iOS-app login bridge (inline script, keep it first) |
 | `css/app.css` | All styles. Single dark look; `--accent` is set from album art |
 | `js/app.js` | Wiring: sources → track state → rhythm → engine, UI, gestures |
-| `js/engine.js` | WebGL2 renderer: visual → crossfade → bloom → tonemap/grain. Adaptive resolution |
+| `js/engine.js` | WebGL2 renderer: visual → crossfade → bloom → neon grade → tonemap/grain. Native resolution (see below) |
 | `js/glsl.js` | Shared GLSL header (uniforms + helpers) and post-processing shaders |
 | `js/rhythm.js` | Synthetic rhythm (no audio access): kick/snare/hat/energy + 32 bands from song position + BPM |
 | `js/tempo-lookup.js` | Automatic BPM per song from Deezer (sandboxed JSONP; Spotify ISRC, else artist + title). Cached in `rv.bpm.<id>` |
 | `js/listen.js` | Listening mode: microphone → Web Audio → same `audio` fields as rhythm.js (real kicks, tempo). Never records |
 | `js/audio-data.js` | Sound for the shaders: waveform + 2 s spectrum history in one 128×65 texture (`uAudio`). Real from the mic, simulated otherwise |
 | `js/visuals/spectrum-history.js` | Shared GLSL for line visuals: `histShape()`, `beatNow()`, `lineCol()`, `lineAt()`, `ellipseLine()` |
-| `js/palette.js` | Album-art → 4-colour palette |
+| `js/palette.js` | Album-art → 4-colour **neon** palette (saturation ≥ 0.85, split-complementary accent) |
+| `js/envelope.js` | Organic level envelope for all bands: ~25 ms attack, exponential ~0.18 s release, peak caps hold 0.22 s then fall with gravity. Frame-rate exact |
 | `js/visuals/*.js` | One file per visual. Registry in `js/visuals/index.js` |
 | `js/sources/*.js` | `spotify.js`, `lastfm.js`, `demo.js` — same interface |
 | `js/config.js` | Spotify Client ID, Last.fm API key, timings |
@@ -47,10 +48,14 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
 
 ## Shader rules
 - GLSL ES 3.00 (`#version 300 es` is added by the header). Write to `fragColor`.
-- Must run on an iPhone at 60 fps at ~0.6× resolution. Raymarch ≤ 110 steps, use a bounding
-  sphere early-out, no nested loops over > 50 iterations.
-- Colours come from `uPal` / `pal()` so every visual follows the album art. Avoid hard-coded hues
-  (exception: Soul Beat's white disc).
+- Renders at the screen's **native resolution** (up to 3 device px per CSS px; iPhone 17 Pro Max = 1320×2868).
+  The engine may only step down to 2 device px per CSS px (`minScale` 0.67) — never lower, so nothing looks pixelated.
+  Budget your shader for that: raymarch ≤ 110 steps with a bounding-sphere early-out, no nested loops over > 50 iterations.
+- Motion must be organic: no stepping. For sound history use `histSmooth()` / `histShapeSmooth()` (curved bands,
+  continuous sub-row scrolling); never animate with `floor()`-ed time unless it is a deliberate pixel style.
+- Colours come from `uPal` / `pal()` so every visual follows the album art. `pal()` is a living neon gradient (hue drifts
+  over time and along t). The final pass adds a neon grade (hue flows across the screen); set `grade: 0` on a visual
+  to opt out. Avoid hard-coded hues (exception: Soul Beat's white disc).
 - Output can exceed 1.0; the final pass tone-maps (ACES) and adds bloom, vignette and grain.
 - Use `P()` for coordinates: shorter screen side spans −0.5…0.5, works in portrait and landscape.
 - Anti-alias edges with `fwidth` / `px = 1.5 / min(uRes.x, uRes.y)`.

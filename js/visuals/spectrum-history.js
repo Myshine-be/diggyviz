@@ -10,6 +10,8 @@ float beatNow() {
 }
 // spectrum with more contrast, so quiet bands stay low and only real peaks stand up (no flat plateaus)
 float histShape(float f, float age) { float v = histAt(f, age); return v * v * (1.6 - 0.6 * v); }
+// same contrast curve on the smooth history (curved bands, continuous scroll) — for organic motion
+float histShapeSmooth(float f, float age) { float v = histSmooth(f, age); return v * v * (1.6 - 0.6 * v); }
 // album colour for frequency f, lifted so lines stay visible on dark covers
 vec3 lineCol(float f) {
   vec3 c = pal(0.4 + 0.58 * f);

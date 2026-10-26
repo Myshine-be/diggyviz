@@ -12,5 +12,5 @@ export const CONFIG = {
   AUTO_SWITCH_SECONDS: 45,
   CROSSFADE_SECONDS: 1.6,
 
-  VERSION: "2.2.1",
+  VERSION: "2.3.0",
 };

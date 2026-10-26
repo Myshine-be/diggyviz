@@ -1,6 +1,7 @@
 import test, { beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { audio, analyse } from '../js/rhythm.js';
+import { resetEnvelope } from '../js/envelope.js';
 import { createPoller } from '../js/sources/polling.js';
 import { CONFIG } from '../js/config.js';
 import { createLastfmSource, parseRecent } from '../js/sources/lastfm.js';
@@ -24,13 +25,15 @@ beforeEach(() => { spotify.logout(); storage.clear(); document.visibilityState =
 
 test('release envelopes match at 30, 60 and 120 Hz', () => {
   const values = [30, 60, 120].map(hz => {
-    audio.bands.fill(1); audio.peaks.fill(1);
+    audio.bands.fill(1); audio.peaks.fill(1); resetEnvelope(audio.peaks);
     for (let n = 0; n < hz / 5; n++) analyse(10000, false, 1, 120, 0, 1 / hz);
     return [audio.bands[0], audio.peaks[0]];
   });
+  // organic envelope (js/envelope.js): exponential release, peak caps hold 0.22 s — identical at every rate
   for (const [band, peak] of values) {
-    assert.ok(Math.abs(band - .58) < 1e-5);
-    assert.ok(Math.abs(peak - .904) < 1e-5);
+    assert.ok(Math.abs(band - Math.exp(-0.2 * 5.5)) < 1e-4, `band ${band}`);
+    assert.ok(Math.abs(peak - 1) < 1e-6, `peak ${peak}`);
+    assert.ok(Math.abs(band - values[0][0]) < 1e-5 && Math.abs(peak - values[0][1]) < 1e-6);
   }
 });
 

@@ -24,6 +24,8 @@ uniform sampler2D uArt;    // album art (or palette gradient)
 uniform sampler2D uAudio;  // row 0: waveform, rows 1-64: spectrum history (see js/audio-data.js)
 uniform float uHistHead;   // newest history row (0..63)
 uniform float uLive;       // 1 = real sound from the microphone, 0 = simulated
+uniform sampler2D uHistS;  // smooth spectrum history: 64 bands x 64 rows, row 0 newest (histSmooth)
+uniform float uHistFrac;   // rows (0..1) since the newest history row: makes scrolling continuous
 
 out vec4 fragColor;
 
@@ -52,12 +54,26 @@ float fbm2(vec2 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 5; i++) { s += 
 float band(float x) { float f = clamp(x, 0.0, 1.0) * 31.0; int i = int(floor(f)); int j = min(i + 1, 31); return mix(uBands[i], uBands[j], fract(f)); }
 float peak(float x) { float f = clamp(x, 0.0, 1.0) * 31.0; int i = int(floor(f)); int j = min(i + 1, 31); return mix(uPeaks[i], uPeaks[j], fract(f)); }
 
-// dark → mid → hi → hot
-vec3 pal(float t) {
+// rotate a colour's hue by angle a (radians), keeping its brightness
+vec3 hueRotate(vec3 c, float a) {
+  const vec3 k = vec3(0.57735);
+  float ca = cos(a);
+  return c * ca + cross(k, c) * sin(a) + k * dot(k, c) * (1.0 - ca);
+}
+
+// dark → mid → hi → hot, as a living neon gradient: saturated, and its hues drift slowly over time
+// and along t, so the same album colours keep turning into new neighbouring tones.
+vec3 palBase(float t) {
   t = clamp(t, 0.0, 1.0);
   if (t < 0.33) return mix(uPal[0], uPal[1], t / 0.33);
   if (t < 0.66) return mix(uPal[1], uPal[2], (t - 0.33) / 0.33);
   return mix(uPal[2], uPal[3], (t - 0.66) / 0.34);
+}
+vec3 pal(float t) {
+  vec3 c = palBase(t);
+  c = hueRotate(c, 0.45 * sin(uTime * 0.045 + t * 2.2));
+  float l = dot(c, vec3(0.299, 0.587, 0.114));
+  return max(mix(vec3(l), c, 1.3), 0.0);
 }
 
 // Same shape as rhythm.js wave(): x 0..1 → about -1..1
@@ -82,9 +98,16 @@ float histRow(float fb, float row) {
 }
 float histAt(float f, float age) {
   float fb = clamp(f, 0.0, 1.0) * 31.0;
-  float row = clamp(age, 0.0, 2.1) * 30.0;
+  float row = clamp(age * 30.0 - uHistFrac, 0.0, 62.999);
   float r0 = floor(row);
   return mix(histRow(fb, r0), histRow(fb, min(r0 + 1.0, 63.0)), row - r0);
+}
+
+// histSmooth(f, age): like histAt but curved and continuous (Catmull-Rom bands, blurred, sub-row time).
+// Use it for anything that should flow organically.
+float histSmooth(float f, float age) {
+  float row = clamp(age * 30.0 - uHistFrac, 0.0, 63.0);
+  return texture(uHistS, vec2((clamp(f, 0.0, 1.0) * 63.0 + 0.5) / 64.0, (row + 0.5) / 64.0)).r;
 }
 
 // Anti-aliased thin line at integer values of x
@@ -132,13 +155,19 @@ void main() {
 
 export const FINAL_FRAG = /* glsl */ `#version 300 es
 precision highp float;
-uniform sampler2D uScene, uBloom; uniform vec2 uRes; uniform float uBloomAmt, uTime, uGrain;
+uniform sampler2D uScene, uBloom; uniform vec2 uRes; uniform float uBloomAmt, uTime, uGrain, uGrade;
 out vec4 fragColor;
 float h(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
 void main() {
   vec2 uv = gl_FragCoord.xy / uRes;
   vec3 c = texture(uScene, uv).rgb + texture(uBloom, uv).rgb * uBloomAmt;
+  // neon grade: hue flows softly across the screen and over time; greys and whites are untouched
+  float ga = uGrade * 0.6 * sin(uv.x * 2.6 - uv.y * 1.9 + uTime * 0.12) + uGrade * 0.25 * sin(uv.y * 3.3 + uTime * 0.07);
+  const vec3 gk = vec3(0.57735);
+  c = c * cos(ga) + cross(gk, c) * sin(ga) + gk * dot(gk, c) * (1.0 - cos(ga));
+  float gl = dot(c, vec3(0.299, 0.587, 0.114));
+  c = max(mix(vec3(gl), c, 1.0 + 0.2 * uGrade), 0.0);
   c = aces(c * 1.05);
   vec2 q = uv - 0.5; c *= 1.0 - dot(q, q) * 0.55;
   c += (h(gl_FragCoord.xy + fract(uTime * 13.7) * 311.0) - 0.5) * uGrain;

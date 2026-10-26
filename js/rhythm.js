@@ -2,6 +2,8 @@
 // generated rhythm locked to the song position and the tapped BPM.
 // Release rates use elapsed seconds so 30/60/120 Hz displays share the same envelope.
 
+import { envelope } from "./envelope.js";
+
 export function hashStr(s) { let h = 2166136261 >>> 0; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return h >>> 0; }
 function hash1(n, seed) { let t = (n * 374761393 + seed * 668265263) | 0; t = Math.imul(t ^ (t >>> 13), 1274126177); return ((t ^ (t >>> 16)) >>> 0) / 4294967296; }
 export function noise(x, seed) { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return hash1(i, seed) * (1 - u) + hash1(i + 1, seed) * u; }
@@ -36,10 +38,7 @@ export function analyse(posMs, playing, seed, bpm, offMs, dt = 1 / 60) {
     const mid = snare * Math.exp(-Math.pow((f - 0.45) / 0.18, 2)) * 0.8;
     const high = hat * Math.pow(f, 1.4) * 0.75;
     const target = clamp((base * 0.55 + low + mid + high) * energy * 0.95);
-    const cur = audio.bands[i];
-    audio.bands[i] = target > cur ? target : Math.max(target, cur - 2.1 * elapsed);
-    audio.peaks[i] = Math.max(audio.peaks[i] - 0.48 * elapsed, audio.bands[i]);
-    sum += audio.bands[i];
+    sum += envelope(audio.bands, audio.peaks, i, target, elapsed);
   }
   audio.kick = kick * energy; audio.snare = snare * energy; audio.hat = hat * energy;
   audio.energy = energy; audio.level = sum / NB;

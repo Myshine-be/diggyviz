@@ -4,6 +4,7 @@
 import { HEADER, VERT, MIX_FRAG, BRIGHT_FRAG, BLUR_FRAG, FINAL_FRAG } from "./glsl.js";
 
 import { SceneClock } from "./scene-clock.js";
+import { buildSmoothHistory, HIST_RATE } from "./audio-data.js";
 
 export class Engine {
   constructor(canvas, visuals, { onError, fadeDuration = 1.6 } = {}) {
@@ -13,8 +14,11 @@ export class Engine {
     const gl = canvas.getContext("webgl2", { antialias: false, alpha: false, depth: false, stencil: false, premultipliedAlpha: false, powerPreference: "high-performance" });
     if (!gl) throw new Error("WebGL2 wordt niet ondersteund door deze browser.");
     this.gl = gl;
-    this.scale = 0.62;
-    this.maxScale = 0.85;
+    // Render at the screen's full native resolution (up to 3 device pixels per CSS pixel).
+    // If the GPU can't keep up, step down at most to 2 device px per CSS px: still sharp, never pixelated.
+    this.scale = 1.0;
+    this.maxScale = 1.0;
+    this.minScale = 0.67;
     this.fadeDur = fadeDuration;
     this.travel = 0;
     this.frameMs = 16; this.lastAdapt = 0;
@@ -57,6 +61,16 @@ export class Engine {
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 128, 65, 0, gl.RED, gl.UNSIGNED_BYTE, new Uint8Array(128 * 65));
     for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+    // smooth spectrum history: 64 bands x 64 rows, row 0 = newest, linear filtering (see buildSmoothHistory)
+    this.histTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.histTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 64, 64, 0, gl.RED, gl.UNSIGNED_BYTE, new Uint8Array(64 * 64));
+    for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+    this.histBytes = new Uint8Array(64 * 64);
+    // stand-in for uPrev on visuals without feedback (a texture can't be read while it is the render target)
+    this.blankTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.blankTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
     this.W = 0; this.H = 0;
     this.#resize();
   }
@@ -69,7 +83,7 @@ export class Engine {
     const vis = this.visuals.find((v) => v.id === id) || this.visuals[0];
     if (this.cur && this.cur.vis.id === vis.id) return vis;
     if (!this.#ensure(vis)) return this.cur?.vis;
-    const slot = { vis, clock: new SceneClock(), t: [this.#target(this.RW, this.RH), this.#target(this.RW, this.RH)], i: 0 };
+    const slot = { vis, clock: new SceneClock(), t: vis.feedback ? [this.#target(this.RW, this.RH), this.#target(this.RW, this.RH)] : [this.#target(this.RW, this.RH)], i: 0 };
     let previous = this.cur;
     if (!instant && this.old && this.fade < 1) {
       // Rapid swipes continue from the actual composite on screen, not the
@@ -145,6 +159,9 @@ export class Engine {
       gl.bindTexture(gl.TEXTURE_2D, this.audioTex);
       gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
       gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 128, 65, gl.RED, gl.UNSIGNED_BYTE, f.sound.bytes);
+      buildSmoothHistory(f.sound, this.histBytes);
+      gl.bindTexture(gl.TEXTURE_2D, this.histTex);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 64, 64, gl.RED, gl.UNSIGNED_BYTE, this.histBytes);
     }
     this.sound = f.sound;
 
@@ -165,6 +182,7 @@ export class Engine {
     this.#pass(this.post.final, null, (u) => {
       u.tex("uScene", this.mixT.tex, 0); u.tex("uBloom", this.bloomA.tex, 1);
       u.f("uBloomAmt", bloomAmt); u.f("uTime", f.time); u.f("uGrain", 0.035);
+      u.f("uGrade", (this.cur.vis.grade ?? 1) * ease + (this.old ? (this.old.vis.grade ?? 1) * (1 - ease) : 0));
     });
   }
 
@@ -175,7 +193,8 @@ export class Engine {
   #drawVisual(slot, f) {
     if (slot.frozen) return slot.t[0].tex;
     const p = this.programs.get(slot.vis.id);
-    const src = slot.t[slot.i], dst = slot.t[1 - slot.i];
+    const single = slot.t.length === 1;
+    const src = slot.t[slot.i], dst = single ? src : slot.t[1 - slot.i];
     if (!p) return src.tex;
     const gl = this.gl, L = p.loc;
     gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fb);
@@ -191,12 +210,14 @@ export class Engine {
     if (L.uBands) gl.uniform1fv(L.uBands, A.bands);
     if (L.uPeaks) gl.uniform1fv(L.uPeaks, A.peaks);
     if (L.uPal) gl.uniform3fv(L.uPal, [...pal.dark, ...pal.mid, ...pal.hi, ...pal.hot].map((v) => v / 255));
-    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.tex); if (L.uPrev) gl.uniform1i(L.uPrev, 0);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, single ? this.blankTex : src.tex); if (L.uPrev) gl.uniform1i(L.uPrev, 0);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.artTex); if (L.uArt) gl.uniform1i(L.uArt, 1);
     gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.audioTex); if (L.uAudio) gl.uniform1i(L.uAudio, 2);
+    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, this.histTex); if (L.uHistS) gl.uniform1i(L.uHistS, 3);
     set1("uHistHead", this.sound?.head ?? 0); set1("uLive", this.sound?.live ? 1 : 0);
+    set1("uHistFrac", Math.min(0.999, (this.sound?.acc ?? 0) * HIST_RATE));
     gl.drawArrays(gl.TRIANGLES, 0, 3);
-    slot.i = 1 - slot.i;
+    if (!single) slot.i = 1 - slot.i;
     return dst.tex;
   }
 
@@ -286,7 +307,7 @@ export class Engine {
   #freeSlot(s) { s.t.forEach((t) => this.#free(t)); }
 
   #resize(force = false) {
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const dpr = Math.min(3, window.devicePixelRatio || 1);
     const r = this.canvas.getBoundingClientRect();
     const W = Math.max(2, Math.round(r.width * dpr)), H = Math.max(2, Math.round(r.height * dpr));
     const RW = Math.max(2, Math.round(W * this.scale)), RH = Math.max(2, Math.round(H * this.scale));
@@ -300,7 +321,7 @@ export class Engine {
     this.bloomB = this.#target(this.BW, this.BH);
     for (const s of [this.cur, this.old]) if (s) {
       const previous = s.t[s.i];
-      const targets = s.frozen ? [this.#target(RW, RH)] : [this.#target(RW, RH), this.#target(RW, RH)];
+      const targets = (s.frozen || !s.vis.feedback) ? [this.#target(RW, RH)] : [this.#target(RW, RH), this.#target(RW, RH)];
       targets.forEach((target) => this.#copy(previous, target));
       this.#freeSlot(s); s.t = targets; s.i = 0;
     }
@@ -311,8 +332,9 @@ export class Engine {
     if (time - this.lastAdapt < 1.5) return;
     this.lastAdapt = time;
     let s = this.scale;
-    if (this.frameMs > 24 && s > 0.34) s = Math.max(0.34, s - 0.08);
-    else if (this.frameMs < 15 && s < this.maxScale) s = Math.min(this.maxScale, s + 0.04);
+    const floor = Math.min(this.minScale ?? 0.67, this.maxScale);
+    if (this.frameMs > 22 && s > floor) s = Math.max(floor, s - 0.11);
+    else if (this.frameMs < 14 && s < this.maxScale) s = Math.min(this.maxScale, s + 0.11);
     if (s !== this.scale) { this.scale = s; this.#resize(true); }
   }
 }
