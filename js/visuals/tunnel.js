@@ -32,9 +32,9 @@ void main() {
   vec2 p = P();
   float r = length(p);
   float a = atan(p.y, p.x);
-  float R = 0.08 + uLevel * 0.12 + uKick * 0.03;
+  float R = 0.08 + uLevel * 0.12 + uKick * 0.07;
   float w = wave(a / TAU + 0.5);
-  float d = abs(r - R * (1.0 + w * 0.45));
+  float d = abs(r - R * (1.0 + w * (0.45 + 0.5 * uSnare)));
   float px = 1.5 / min(uRes.x, uRes.y);
   float ring = 1.0 - smoothstep(0.0, px * 2.5 + 0.003, d);
   ring += exp(-d * 90.0) * 0.35;
@@ -42,7 +42,7 @@ void main() {
   vec3 col = max(prev, c * ring * (0.9 + uKick));
 
   // centre spark
-  col += pal(0.8) * exp(-r * 60.0) * uKick * 0.6;
+  col += pal(0.8) * exp(-r * 30.0) * uKick * 1.2;
   fragColor = vec4(min(col, vec3(3.0)), 1.0);
 }`,
 };

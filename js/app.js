@@ -234,8 +234,8 @@ function frame(now) {
   const mode = inp ? inp.kind + (inp.io.receiving ? "" : "-idle") : "simulated";
   if (mode !== soundMode) {
     resetAudioData(); soundMode = mode;
-    audio.bands.fill(0); audio.peaks.fill(0);
-    for (const key of ["kick", "snare", "hat", "energy", "level"]) audio[key] = 0;
+    audio.bands.fill(0); audio.peaks.fill(0); audio.flux.fill(0);
+    for (const key of ["kick", "snare", "hat", "energy", "level", "hit"]) audio[key] = 0;
   }
   // Listening mode: the microphone's real kicks drive the rhythm (beat phase and tempo). Otherwise the
   // simulated rhythm follows the song position and the tapped / looked-up tempo.

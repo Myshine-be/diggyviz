@@ -19,7 +19,7 @@ vec3 bars(vec2 p, float halfW, out float lit) {
   float aa = fwidth(ax / colW) * 1.5;
   float colMask = smoothstep(0.14, 0.14 + aa, fx) * (1.0 - smoothstep(0.86 - aa, 0.86, fx));
   float bi = pow(ci / (N - 1.0), 0.85);
-  float h = band(bi) * MAXH;
+  float h = min(1.0, band(bi) + 0.35 * flux(bi)) * MAXH;   // a new note kicks its bar up
   float pk = peak(bi) * MAXH;
   float fy = fract(p.y / CELL);
   float segMask = smoothstep(0.0, 0.08, fy) * (1.0 - smoothstep(0.66, 0.74, fy));
@@ -29,7 +29,7 @@ vec3 bars(vec2 p, float halfW, out float lit) {
   float capY = floor(pk / CELL) * CELL + CELL;
   float cap = step(abs(p.y - capY - CELL * 0.35), CELL * 0.35) * step(0.01, pk);
   lit = on * colMask * segMask;
-  vec3 col = c * lit * (1.05 + uKick * 0.6);
+  vec3 col = c * lit * (1.05 + uKick * 0.9 + flux(bi) * 0.9);
   col += c * 0.05 * colMask * segMask * step(p.y, MAXH);    // unlit LEDs
   col = mix(col, vec3(1.0), cap * colMask * 0.9);
   return col;

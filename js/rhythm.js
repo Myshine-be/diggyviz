@@ -11,8 +11,8 @@ const clamp = (v, a = 0, b = 1) => v < a ? a : v > b ? b : v;
 
 export const NB = 32;
 export const audio = {
-  bands: new Float32Array(NB), peaks: new Float32Array(NB),
-  kick: 0, snare: 0, hat: 0, energy: 0, level: 0, beat: 0, beatIdx: 0, t: 0, seed: 1,
+  bands: new Float32Array(NB), peaks: new Float32Array(NB), flux: new Float32Array(NB),
+  kick: 0, snareN: 0, hit: 0, snare: 0, hat: 0, energy: 0, level: 0, beat: 0, beatIdx: 0, t: 0, seed: 1,
 };
 
 export function analyse(posMs, playing, seed, bpm, offMs, dt = 1 / 60) {
@@ -39,9 +39,13 @@ export function analyse(posMs, playing, seed, bpm, offMs, dt = 1 / 60) {
     const high = hat * Math.pow(f, 1.4) * 0.75;
     const target = clamp((base * 0.55 + low + mid + high) * energy * 0.95);
     sum += envelope(audio.bands, audio.peaks, i, target, elapsed);
+    // onsets: the fresh part of each hit, in the frequencies it belongs to
+    audio.flux[i] = clamp((Math.exp(-ph * 14) * Math.pow(1 - f, 2) + (beatIdx & 1 ? Math.exp(-ph * 14) : 0) * Math.exp(-Math.pow((f - 0.45) / 0.18, 2)) + Math.exp(-hp * 22) * Math.pow(f, 1.4) * 0.6) * energy);
   }
   audio.kick = kick * energy; audio.snare = snare * energy; audio.hat = hat * energy;
   audio.energy = energy; audio.level = sum / NB;
   audio.beat = ph; audio.beatIdx = beatIdx;
+  audio.snareN = Math.floor((beatIdx + 1) / 2);
+  audio.hit = Math.max(audio.kick, audio.snare * 0.85);
   audio.t = t; audio.seed = seed;
 }

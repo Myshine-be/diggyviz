@@ -18,6 +18,9 @@ uniform float uTravel;     // integrated speed (for fly-through visuals)
 uniform float uSeed;       // per-track 0..999
 uniform float uBands[32];  // spectrum 0..1, low → high
 uniform float uPeaks[32];
+uniform float uFlux[32];   // onsets 0..1: a new note or change of timbre in that band (fast attack, ~0.1 s fade)
+uniform float uHit;        // strongest hit right now (kick, snare/clap or onset), 0..1
+uniform float uKickN, uSnareN; // kick / snare counters: hash them to pick a different group on every hit
 uniform vec3  uPal[4];     // 0 dark, 1 mid, 2 hi, 3 hot (0..1)
 uniform sampler2D uPrev;   // this visual's previous frame (feedback)
 uniform sampler2D uArt;    // album art (or palette gradient)
@@ -52,6 +55,7 @@ float noise3(vec3 x) {
 float fbm2(vec2 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 5; i++) { s += a * noise2(p); p = p * 2.03 + 17.1; a *= 0.5; } return s; }
 
 float band(float x) { float f = clamp(x, 0.0, 1.0) * 31.0; int i = int(floor(f)); int j = min(i + 1, 31); return mix(uBands[i], uBands[j], fract(f)); }
+float flux(float x) { float f = clamp(x, 0.0, 1.0) * 31.0; int i = int(floor(f)); int j = min(i + 1, 31); return mix(uFlux[i], uFlux[j], fract(f)); }
 float peak(float x) { float f = clamp(x, 0.0, 1.0) * 31.0; int i = int(floor(f)); int j = min(i + 1, 31); return mix(uPeaks[i], uPeaks[j], fract(f)); }
 
 // rotate a colour's hue by angle a (radians), keeping its brightness
@@ -156,12 +160,14 @@ void main() {
 export const FINAL_FRAG = /* glsl */ `#version 300 es
 precision highp float;
 uniform sampler2D uScene, uBloom; uniform vec2 uRes; uniform float uBloomAmt, uTime, uGrain, uGrade;
+uniform float uPunchKick, uPunchSnare; // global hit response (kick: short zoom + exposure, snare/clap: bloom flash)
 out vec4 fragColor;
 float h(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
 void main() {
   vec2 uv = gl_FragCoord.xy / uRes;
-  vec3 c = texture(uScene, uv).rgb + texture(uBloom, uv).rgb * uBloomAmt;
+  vec2 zv = 0.5 + (uv - 0.5) * (1.0 - 0.028 * uPunchKick);
+  vec3 c = texture(uScene, zv).rgb * (1.0 + 0.22 * uPunchKick) + texture(uBloom, zv).rgb * (uBloomAmt + 0.6 * uPunchSnare);
   // neon grade: hue flows softly across the screen and over time; greys and whites are untouched
   float ga = uGrade * 0.6 * sin(uv.x * 2.6 - uv.y * 1.9 + uTime * 0.12) + uGrade * 0.25 * sin(uv.y * 3.3 + uTime * 0.07);
   const vec3 gk = vec3(0.57735);

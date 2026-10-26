@@ -23,6 +23,7 @@ float trace(float u, float lag, float seed) {
   y += a3 * sin(TAU * (u * 5.90 - t * 0.61) + seed * 0.9) * 0.32;
   y += a4 * sin(TAU * (u * 8.30 + t * 0.83) + seed * 4.4) * 0.20;
   y += 0.16 * sin(TAU * (u * 0.70 + t * 0.07) + seed);          // idle drift: never a flat line
+  y += 0.9 * (flux(0.3) + flux(0.6)) * exp(-lag * 6.0) * sin(TAU * (u * 4.3 - t * 0.9) + seed * 2.7);   // a new note ripples through
   return y;
 }
 
@@ -35,7 +36,7 @@ void main() {
   float xL = -halfW * 1.04;
   float u = clamp((p.x - xL) / (V.x - xL), 0.0, 1.0);
   float env = pow(1.0 - u, 1.25);
-  float amp = 0.12 * (1.0 + 0.9 * tall);
+  float amp = 0.12 * (1.0 + 0.9 * tall) * (1.0 + 0.6 * uKick + 0.4 * uSnare);
 
   vec3 col = uPal[0] * 0.10;
   col += pal(0.8) * exp(-length((p - V) * vec2(1.0, 3.0)) * 5.0) * 0.12;   // soft glow where the bundle meets
@@ -47,7 +48,7 @@ void main() {
     float slope = dFdx(y) / max(dFdx(p.x), 1e-5);
     float l = lineAt(p.y - y, slope, px * 1.6);
     vec3 c = pal(0.35 + 0.5 * k + 0.15 * u);
-    col += c * l * mix(1.0, 0.45, k) * (0.55 + 0.45 * (1.0 - u));
+    col += c * l * mix(1.0, 0.45, k) * (0.55 + 0.45 * (1.0 - u)) * (1.0 + 1.3 * uHit * exp(-fi * 0.12));
   }
   fragColor = vec4(col, 1.0);
 }

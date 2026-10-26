@@ -14,7 +14,7 @@ float blobSDF(vec2 q, out float ang) {
   vec2 c1 = c0 + vec2(-0.075, 0.055) * (1.0 + 0.3 * sin(t * 1.3));
   vec2 c2 = c0 + vec2(0.07, -0.04) * (1.0 + 0.3 * cos(t * 1.1));
   vec2 c3 = c0 + vec2(sin(t * 2.0) * 0.05, -0.07);
-  float s = 1.45 + uLevel * 0.45 + uKick * 0.1;
+  float s = 1.45 + uLevel * 0.45 + uKick * 0.22;
   float d = length(q - c0) - 0.085 * s;
   d = smin(d, length(q - c1) - 0.05 * s, 0.07);
   d = smin(d, length(q - c2) - 0.06 * s, 0.07);
@@ -24,7 +24,7 @@ float blobSDF(vec2 q, out float ang) {
   // ferrofluid spikes
   float sp = pow(abs(sin(ang * 13.0 + uSongTime * 0.4)), 18.0);
   float sp2 = pow(abs(sin(ang * 21.0 - uSongTime * 0.3)), 30.0);
-  float amp = 0.006 + uKick * 0.035 + uDrop * 0.05 + band(0.6) * 0.012;
+  float amp = 0.006 + uKick * 0.07 + uSnare * 0.03 + flux(0.5) * 0.03 + uDrop * 0.05 + band(0.6) * 0.02;
   d -= (sp + sp2 * 0.6) * amp * (1.0 - smoothstep(-0.01, 0.03, d));
   // fuzzy edge
   d += (noise2(q * 90.0 + uTime * 0.6) - 0.5) * 0.006;
@@ -43,7 +43,7 @@ void main() {
   vec3 wall = vec3(0.24, 0.24, 0.235) * (1.0 - dot(p, p) * 0.35);
   wall = mix(wall, wall * (0.8 + 0.4 * uPal[1]), 0.2);
   float halo = exp(-max(r - R, 0.0) * 34.0);
-  vec3 col = wall + vec3(1.0, 0.95, 0.72) * halo * (0.5 + 0.2 * uEnergy);
+  vec3 col = wall + vec3(1.0, 0.95, 0.72) * halo * (0.5 + 0.2 * uEnergy + 0.6 * uKick);
 
   // the moon-disc
   float disc = 1.0 - smoothstep(R - px, R + px, r);

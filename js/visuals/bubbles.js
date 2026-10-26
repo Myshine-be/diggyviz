@@ -57,7 +57,7 @@ void main() {
       float b = 1.0 - smoothstep(rad - soft, rad + soft, d);
       b *= 0.7 + 0.4 * smoothstep(rad * 0.4, rad, d);  // bokeh rim
       float tw = 0.8 + 0.2 * sin(t * (1.5 + 2.0 * h.x) + h.y * 40.0) + uHat * 0.25 * step(0.9, h.y);
-      col += bc * b * dens * tw * gain * keep;
+      col += bc * b * dens * tw * gain * keep * (1.0 + 1.1 * flux(h.x) + 0.6 * uKick * step(0.6, h.y));
     }
   }
   fragColor = vec4(col, 1.0);

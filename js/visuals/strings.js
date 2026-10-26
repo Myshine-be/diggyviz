@@ -1,6 +1,6 @@
 // Strings — a bundle of thin glowing lines along the horizon, pinched at both ends,
 // drawn from the waveform of the sound itself, like an oscilloscope (real sound in listening mode).
-// Calm by design: the music changes the shape of the lines, never the brightness of the screen.
+// The waveform shapes the lines; kicks and claps make the bundle jump and flare.
 
 export default {
   id: "strings",
@@ -24,7 +24,7 @@ void main() {
 
   float env = pow(sin(PI * clamp(u, 0.0, 1.0)), 1.2);
   float loud = clamp(uEnergy * 1.1 + 0.2, 0.3, 1.0);   // slow section loudness; the beat is in the wave shape
-  float A = env * 0.36 * loud;                      // up to ~35 % of the screen height
+  float A = env * 0.36 * loud * (1.0 + 0.55 * uKick + 0.35 * uSnare);   // ~35 % of the height, more on a hit
 
   vec3 lc = lineColour();
   vec3 col = uPal[0] * 0.16 + lc * 0.025 * exp(-p.y * p.y * 40.0);
@@ -44,7 +44,7 @@ void main() {
     lines += (core * (i == 0 ? 0.9 : 0.45) + glow) * (0.55 + 0.45 * h);
   }
   // Bound accumulated light: twelve overlapping curves must not become a bright screen wash.
-  col += lc * (1.0 - exp(-lines * 0.5)) * 0.95;
+  col += lc * (1.0 - exp(-lines * (0.5 + 0.5 * uHit))) * (0.95 + 0.5 * uHit);
   fragColor = vec4(col, 1.0);
 }
 `,

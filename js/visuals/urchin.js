@@ -46,7 +46,8 @@ float sdRoundCone(vec3 p, vec3 a, vec3 b, float r1, float r2) {
 }
 
 float R;
-float gTip;
+float gTip, gId;
+vec3 gQ;
 
 mat3 orient() {
   float a = uTime * 0.13 + uSongTime * 0.05, b = uTime * 0.09;
@@ -55,15 +56,24 @@ mat3 orient() {
   return rx * ry;
 }
 
+// Each spike listens to its own pitch: neighbouring spikes share a frequency region, so a note lights up a
+// patch of the ball. On every kick a different ~30 % of the spikes shoots out, on every snare/clap another ~20 %.
+float spikeFreq(vec3 q, float id) { return clamp(noise3(q * 1.7 + uSeed * 0.013) * 1.25 - 0.12 + 0.08 * hash13(vec3(id, 7.3, 1.1)), 0.0, 1.0); }
+float kickSel(float id) { return step(hash13(vec3(id, uKickN, 3.7)), 0.30); }
+float snareSel(float id) { return step(hash13(vec3(id, uSnareN + 91.0, 5.1)), 0.20); }
+
 float spikeLen(vec3 q, float id) {
-  float lat = abs(q.y);
-  float f = noise3(q * 2.2 + vec3(0.0, uSongTime * 0.7, uTime * 0.2));
-  float b = band(1.0 - lat);
-  float jitter = 0.8 + 0.4 * hash13(vec3(id, 1.7, 3.1));
+  float fq = spikeFreq(q, id);
+  float jitter = 0.85 + 0.3 * hash13(vec3(id, 1.7, 3.1));
   float e = max(uEnergy, 0.12);
-  float raw = (0.10 + e * (0.18 + 0.75 * b * f) + uKick * 0.22 * f + uDrop * 0.4 * f) * jitter;
+  float raw = 0.10 + 0.22 * e
+            + 1.15 * pow(band(fq), 1.6) * e          // the level of its own pitch, with contrast
+            + 1.7 * flux(fq)                         // a new note there: shoot
+            + 2.7 * kickSel(id) * uKick              // kick group
+            + 2.0 * snareSel(id) * uSnare            // snare / clap group
+            + uDrop * 0.6;
   // Smooth saturation keeps every tip inside the bounding sphere, even on a track change.
-  return 0.08 + 0.78 * (1.0 - exp(-raw));
+  return 0.07 + 0.79 * (1.0 - exp(-raw * jitter));
 }
 
 float map(vec3 p) {
@@ -74,6 +84,7 @@ float map(vec3 p) {
   float dSpike = sdRoundCone(p, s.xyz * R * 0.9, s.xyz * (R + L), 0.035, 0.0035);
   float dCore = r - R;
   gTip = clamp((dot(p, s.xyz) - R) / L, 0.0, 1.0);
+  gId = s.w; gQ = s.xyz;
   return smin(dCore, dSpike, 0.035);
 }
 
@@ -84,7 +95,7 @@ vec3 calcNormal(vec3 p) {
 
 void main() {
   vec2 p = P();
-  R = 0.46 + uKick * 0.03 + uDrop * 0.05;
+  R = 0.46 + uKick * 0.05 + uDrop * 0.05;
   // Max extent is R(0.54) + L(0.86) = 1.40; with a 0.37 half-FOV tangent that fits the
   // portrait width from distance >= 4.03. 4.05 keeps the orb as large as possible.
   vec3 ro = vec3(0.0, 0.0, 4.05);
@@ -103,12 +114,13 @@ void main() {
     float t = max(0.0, -b - sqrt(h)), tmax = -b + sqrt(h);
     float d = 1.0; int i;
     bool hit = false;
-    for (i = 0; i < 110; i++) {
+    for (i = 0; i < 140; i++) {
       vec3 pos = ro + rd * t;
       d = map(pos);
-      glow += exp(-d * 28.0) * (0.15 + 0.85 * gTip) * 0.012;
+      glow += exp(-d * 28.0) * (0.15 + 0.85 * gTip) * (0.012 + 0.02 * kickSel(gId) * uKick);
       if (d < 0.0008 * t) { hit = true; break; }
-      t += d * 0.72;
+      // the distance only sees the nearest spike: near the ball, cap the step so long neighbours are not skipped
+      t += min(d * 0.72, length(pos) < R + 0.95 ? 0.045 : 1e3);
       if (t > tmax) break;
     }
     if (hit) {
@@ -119,11 +131,16 @@ void main() {
       vec3 l1 = normalize(o * vec3(0.6, 0.8, 0.6));
       float dif = clamp(dot(n, l1), 0.0, 1.0);
       float rim = pow(1.0 - clamp(dot(n, -rd), 0.0, 1.0), 3.0);
-      float ao = 1.0 - float(i) / 110.0;
+      float ao = 1.0 - float(i) / 140.0;
       vec3 base = mix(uPal[0] * 0.4 + 0.01, uPal[1] * 0.75, smoothstep(0.0, 0.9, tip));
       col = base * (0.1 + 0.85 * dif) * (0.35 + 0.65 * ao);
       col += mix(uPal[1], uPal[2], 0.25) * pow(tip, 3.0) * (0.35 + 0.75 * uEnergy + 0.35 * uKick);
       col += uPal[1] * rim * 0.25 * tip;
+      // hits light up: kick group glows hot white-gold, snare/clap group in the contrast colour, new notes flare
+      float tk = pow(tip, 1.6);
+      col += mix(uPal[3], vec3(1.0, 0.95, 0.8), 0.45) * kickSel(gId) * uKick * tk * 2.2;
+      col += pal(0.95) * snareSel(gId) * uSnare * tk * 1.8;
+      col += mix(uPal[2], vec3(1.0), 0.3) * flux(spikeFreq(gQ, gId)) * tk * 1.3;
     }
   }
   col += uPal[1] * glow * (0.35 + 0.7 * uEnergy);

@@ -27,7 +27,7 @@ void main() {
   vec2 sp = p - vec2(sway * 0.5, horizon + 0.11);
   float sun = 1.0 - smoothstep(0.165 - px, 0.165 + px, length(sp));
   col = mix(col, mix(pal(0.98), pal(0.7), smoothstep(-0.16, 0.16, sp.y)), sun * 0.9);
-  col += pal(0.9) * exp(-length(sp) * 6.0) * 0.2;
+  col += pal(0.9) * exp(-length(sp) * 6.0) * (0.2 + 0.35 * uKick);
 
   float scroll = uTime * RATE;
   float base = floor(scroll), fr = fract(scroll);
@@ -42,7 +42,8 @@ void main() {
     float spec = histShapeSmooth(f, d / RATE);
     float envC = exp(-wx * wx * 0.9);
     float terrain = (noise2(vec2(wx * 1.6, id * 0.35)) - 0.5) * 0.10 + (noise2(vec2(wx * 4.1, id * 0.9)) - 0.5) * 0.03;
-    float h = 0.06 + terrain + spec * 0.42 * envC;
+    float hitRow = exp(-d * 0.6);                // the front ridges carry the hits
+    float h = 0.06 + terrain + (spec * 0.42 + (1.3 * flux(f) + 0.6 * uKick * (1.0 - f)) * 0.14 * hitRow) * envC;
     float y = horizon + (h - camH) / z * 0.62;
     float slope = dFdx(y) / max(dFdx(p.x), 1e-5);
     float fog = exp(-d * 0.055) * smoothstep(0.0, 1.2, d);
@@ -51,7 +52,7 @@ void main() {
     float below = 1.0 - smoothstep(-px, px, p.y - y);
     vec3 body = uPal[0] * 0.14 + lc * (0.03 + 0.22 * exp(-max(y - p.y, 0.0) * 14.0)) * fog;   // flank glows under the crest
     col = mix(col, body, below * vis);          // solid mountain body
-    col += lc * lineAt(p.y - y, slope, px * 1.4) * vis * fog * 1.15;       // glowing ridge line
+    col += lc * lineAt(p.y - y, slope, px * 1.4) * vis * fog * 1.15 * (1.0 + 1.3 * uHit * hitRow);       // glowing ridge line
     covered = max(covered, below);
   }
   fragColor = vec4(col, 1.0);

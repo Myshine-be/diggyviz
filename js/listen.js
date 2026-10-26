@@ -26,6 +26,9 @@ export function makeDetector(sampleRate, fftSize, nb = 32) {
     nb, edges: bandEdges(sampleRate, fftSize, nb),
     bassR: [bin(30), bin(150) + 1], bodyR: [bin(300), bin(3000) + 1], body: 0.3, midR: [bin(1500), bin(4000) + 1], hiR: [bin(6000), bin(12000) + 1],
     bandMax: new Float32Array(nb).fill(0.25),
+    // contrast + onsets per band: recent average level, previous level and the usual size of a rise
+    bandAvg: new Float32Array(nb).fill(0.3), prevNorm: new Float32Array(nb), riseAvg: new Float32Array(nb).fill(0.02),
+    snareN: 0, lastSnare: -1,
     bassMax: 0.3, bassFloor: 0.1, prevBass: 0, fluxAvg: 0.02,
     prevMid: 0, prevHi: 0, midAvg: 0.02, hiAvg: 0.02,
     levelMax: 0.25, slow: 0, fast: 0, quiet: 0,
@@ -43,14 +46,26 @@ export function processSpectrum(st, spec, dt, out) {
   st.t += dt;
   const decay = (v, rate) => v * Math.exp(-dt * rate);
 
-  // spectrum bands with per-band automatic gain
-  let sum = 0;
+  // spectrum bands with per-band automatic gain, plus contrast: a band that rises above its own recent
+  // average jumps out, a sound that just sustains settles down. flux[i] = a new note / change of timbre there.
+  if (!out.flux) out.flux = new Float32Array(st.nb);
+  let sum = 0, fluxMax = 0;
+  const avgK = 1 - Math.exp(-dt / 1.5), riseK = 1 - Math.exp(-dt * 2), fluxFall = Math.exp(-dt * 10);
   for (let i = 0; i < st.nb; i++) {
     const [a, b] = st.edges[i];
     const v = avgBins(spec, a, b);
     st.bandMax[i] = Math.max(v, st.bandMax[i] - dt * 0.05, 0.04);   // low floor: quiet rooms / far microphones still fill the range
-    const target = clamp(v / st.bandMax[i]) * (1 - (i / st.nb) * 0.25);
+    const norm = clamp(v / st.bandMax[i]);
+    st.bandAvg[i] += (norm - st.bandAvg[i]) * avgK;
+    const lift = clamp((norm - st.bandAvg[i]) / Math.max(0.15, 1 - st.bandAvg[i]));
+    const target = clamp(norm * 0.5 + lift * 0.85) * (1 - (i / st.nb) * 0.25);
     sum += envelope(out.bands, out.peaks, i, target, dt);
+    const rise = Math.max(0, norm - st.prevNorm[i]);
+    st.prevNorm[i] = norm;
+    const onset = clamp((rise - st.riseAvg[i] * 2 - 0.02) / (st.riseAvg[i] * 4 + 0.12));
+    st.riseAvg[i] += (rise - st.riseAvg[i]) * riseK;
+    out.flux[i] = Math.max(onset * (v > 0.05 ? 1 : 0), out.flux[i] * fluxFall);
+    fluxMax = Math.max(fluxMax, out.flux[i]);
   }
 
   // bass level, normalised between a slow floor and a slow-falling maximum
@@ -89,7 +104,10 @@ export function processSpectrum(st, spec, dt, out) {
   const mf = Math.max(0, mid - st.prevMid), hf = Math.max(0, hi - st.prevHi);
   st.prevMid = mid; st.prevHi = hi;
   st.midAvg += (mf - st.midAvg) * (1 - Math.exp(-dt * 1.5)); st.hiAvg += (hf - st.hiAvg) * (1 - Math.exp(-dt * 1.5));
-  st.snare = mf > Math.max(0.03, st.midAvg * 3) ? 1 : decay(st.snare, 9);
+  const isSnare = mf > Math.max(0.03, st.midAvg * 3);
+  if (isSnare && st.t - st.lastSnare > 0.12) st.snareN++;
+  if (isSnare) st.lastSnare = st.t;
+  st.snare = isSnare ? 1 : decay(st.snare, 9);
   st.hat = hf > Math.max(0.02, st.hiAvg * 3) ? 1 : decay(st.hat, 16);
 
   // overall energy with automatic gain; a drop = loud bass after a quieter stretch
@@ -107,6 +125,8 @@ export function processSpectrum(st, spec, dt, out) {
   out.energy = energy; out.level = level; out.bass = bass;
   out.punch = st.punch; out.boom = st.boom;
   out.beat = ((st.t - st.phaseAt) / beatLen) % 1; out.beatIdx = st.beatIdx;
+  out.snareN = st.snareN;
+  out.hit = Math.max(out.kick, out.snare * 0.85, fluxMax * 0.7);
   out.t = st.t;
   return out;
 }

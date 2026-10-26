@@ -183,6 +183,9 @@ export class Engine {
       u.tex("uScene", this.mixT.tex, 0); u.tex("uBloom", this.bloomA.tex, 1);
       u.f("uBloomAmt", bloomAmt); u.f("uTime", f.time); u.f("uGrain", 0.035);
       u.f("uGrade", (this.cur.vis.grade ?? 1) * ease + (this.old ? (this.old.vis.grade ?? 1) * (1 - ease) : 0));
+      // global punch on every visual (per visual: punch, default 1)
+      const punch = (this.cur.vis.punch ?? 1) * ease + (this.old ? (this.old.vis.punch ?? 1) * (1 - ease) : 0);
+      u.f("uPunchKick", punch * (f.audio.kick ?? 0)); u.f("uPunchSnare", punch * (f.audio.snare ?? 0));
     });
   }
 
@@ -209,6 +212,8 @@ export class Engine {
     set1("uDrop", f.drop); set1("uTravel", this.travel); set1("uSeed", f.seed);
     if (L.uBands) gl.uniform1fv(L.uBands, A.bands);
     if (L.uPeaks) gl.uniform1fv(L.uPeaks, A.peaks);
+    if (L.uFlux && A.flux) gl.uniform1fv(L.uFlux, A.flux);
+    set1("uHit", A.hit ?? Math.max(A.kick, A.snare)); set1("uKickN", A.beatIdx ?? 0); set1("uSnareN", A.snareN ?? 0);
     if (L.uPal) gl.uniform3fv(L.uPal, [...pal.dark, ...pal.mid, ...pal.hi, ...pal.hot].map((v) => v / 255));
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, single ? this.blankTex : src.tex); if (L.uPrev) gl.uniform1i(L.uPrev, 0);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.artTex); if (L.uArt) gl.uniform1i(L.uArt, 1);
