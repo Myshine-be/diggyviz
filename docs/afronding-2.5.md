@@ -13,7 +13,7 @@ Basis: Claude's overdracht in HANDOFF.md, branch v2 op 9b77f3d. Live vóór deze
 
 ## Controles
 
-59 lokale Node-tests plus syntax- en whitespacechecks. Browserworkflow controleert alle 13 shaders, audio/history, tempo-isolatie, overgangen, context restoration en storyklokken; aanvullend een stream uit een echt tweede venster naar Web Audio in het hoofdvenster en 39 rust/kick/clapbeelden. De resultaten en beelden staan bij de release-PR en GitHub Actions.
+Geslaagd: 59 Node-tests, syntax- en whitespacechecks en 26 browsercontroles in [GitHub Actions](https://github.com/Myshine-be/diggyviz/actions/runs/40357324798), voor commit `34b491a`. De browserworkflow controleert alle 13 shaders, audio/history, tempo-isolatie, overgangen, context restoration en storyklokken; aanvullend een stream uit een echt tweede venster naar Web Audio in het hoofdvenster en 39 rust/kick/clapbeelden. Alle 39 rust/kick/clapbeelden zijn bekeken: geen grote wit uitgebrande vlakken; Urchin blijft binnen beeld zonder zichtbare onderbroken stekels. De resultaten en beelden staan bij [PR #5](https://github.com/Myshine-be/diggyviz/pull/5) en GitHub Actions. De synthetische stressmeting toont nog stevige helderheidswissels bij onder andere Strings, Vanish en Urchin (maximale gemiddelde frameverschillen circa 0,19 / 0,15 / 0,15); dit is diagnostiek, geen bewijs van kijkcomfort.
 
 De scripts uit `/home/claude/qa` waren niet beschikbaar in deze omgeving. De controles zijn daarom als reproduceerbare tests in de repo toegevoegd. Er zijn geen screenshots of meetresultaten uit die map aangenomen als eigen bewijs.
 
