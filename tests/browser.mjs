@@ -27,7 +27,7 @@ const url = `http://127.0.0.1:${server.address().port}/`;
 const profile = await mkdtemp(resolve(tmpdir(), 'diggy-qa-'));
 await mkdir(resolve(root, 'test-results'), { recursive: true });
 const chrome = spawn(process.env.CHROME_BIN || 'google-chrome', [
-  '--headless=new', '--no-sandbox', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check',
+  '--headless=new', '--autoplay-policy=no-user-gesture-required', '--no-sandbox', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check',
   '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--remote-debugging-pipe', `--user-data-dir=${profile}`,
 ], { stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] });
 let seq = 0, buffer = '', session;
@@ -227,6 +227,45 @@ try {
   assert.equal(await evaluate('window.diggy.engine.currentVisual.id'), 'nightdrive');
   assert.equal(await evaluate(`document.querySelector('[data-pick="lastfm"]').disabled`), true);
   results.push({test:'saved visual fallback and unavailable Last.fm',passed:true});
+  // Stream produced in a separate same-origin helper must be analysable in the main window.
+  const helperAudio=await evaluate(`(async()=>{
+    const {openHelper,createTabListener}=await import('./js/tab-audio.js');
+    const w=openHelper();if(!w)throw new Error('test popup blocked');
+    const c=new w.AudioContext();await c.resume();const o=c.createOscillator(),g=c.createGain(),d=c.createMediaStreamDestination();
+    o.frequency.value=180;g.gain.value=.08;o.connect(g);g.connect(d);o.start();
+    w.navigator.mediaDevices.getDisplayMedia=async()=>d.stream;
+    const l=createTabListener({open:()=>w});const ok=await l.start();
+    await new Promise(r=>setTimeout(r,250));
+    const out={bands:new Float32Array(32),peaks:new Float32Array(32)};
+    for(let n=0;n<15;n++)l.analyse(out,1/60);
+    const wave=new Float32Array(128);l.wave(wave,1/60);
+    const result={ok,helper:l.usesHelper,level:out.level,range:Math.max(...wave)-Math.min(...wave)};
+    o.stop();await c.close();l.stop();result.closed=w.closed;result.ended=d.stream.getAudioTracks().every(t=>t.readyState==='ended');return result;
+  })()`);
+  assert.ok(helperAudio.ok&&helperAudio.helper&&helperAudio.level>0&&helperAudio.range>.1&&helperAudio.closed&&helperAudio.ended,JSON.stringify(helperAudio));
+  results.push({test:'same-origin helper stream into main-window Web Audio',...helperAudio});
+
+  // Every visual at rest, kick and clap, with measured-data uniforms and changing hit counters.
+  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+  const hits=[];
+  for(const id of ids)for(const state of ['rest','kick','snare']){
+    const stats=await evaluate(`(async()=>{
+      const {audioData,setWave,pushHistory}=await import('./js/audio-data.js');
+      const e=window.diggy.engine;e.setVisual('${id}',{instant:true});
+      const a={bands:new Float32Array(32).fill(.25),peaks:new Float32Array(32).fill(.3),flux:new Float32Array(32),kick:0,snare:0,hat:0,energy:.7,level:.3,beat:0,beatIdx:7,snareN:5,hit:0};
+      a['${state}']='${state}'==='rest'?0:1;a.hit='${state}'==='rest'?0:1;
+      for(let i=0;i<32;i++)a.flux[i]='${state}'==='rest'?0:Math.exp(-Math.pow((i-('${state}'==='kick'?5:19))/4,2));
+      const wave=new Float32Array(128).map((_,i)=>Math.sin(i*.18)*.65);setWave(wave);for(let i=0;i<65;i++)pushHistory(a.bands);
+      e.cur.clock.seconds=96;e.cur.clock.beats=192.3;
+      e.render({time:96,dt:1/60,sceneDt:0,songTime:30,bpm:120,audio:a,pal:{dark:[2,4,8],mid:[30,220,130],hi:[140,250,220],hot:[245,60,160]},drop:0,seed:11,sound:audioData});
+      document.querySelector('#app').classList.add('idle');
+      const gl=e.gl,p=new Uint8Array(e.W*e.H*4);gl.readPixels(0,0,e.W,e.H,gl.RGBA,gl.UNSIGNED_BYTE,p);
+      let white=0,lit=0;for(let i=0;i<p.length;i+=4){if(p[i]>245&&p[i+1]>245&&p[i+2]>245)white++;if(p[i]+p[i+1]+p[i+2]>40)lit++;}
+      return {id:'${id}',state:'${state}',whiteFraction:white/(p.length/4),litFraction:lit/(p.length/4),glError:gl.getError()};
+    })()`);
+    assert.equal(stats.glError,0);assert.ok(stats.litFraction>0);hits.push(stats);await screenshot('hit-'+id+'-'+state);
+  }
+  results.push({test:'13 visuals at rest, kick and snare',hits});
   // Low-resolution temporal diagnostic, not a WCAG/medical certification or an FPS test.
   // Exercise consecutive frames with hard 150 BPM attacks, including the two arrivals.
   await send('Emulation.setDeviceMetricsOverride',{width:120,height:214,deviceScaleFactor:1,mobile:true});
@@ -236,14 +275,14 @@ try {
       const {pushHistory,setWave,WAVE_N,HIST_ROWS}=await import('./js/audio-data.js');
       const d={bytes:new Uint8Array(WAVE_N*(HIST_ROWS+1)),head:0,live:true,acc:0};
       const e=window.diggy.engine;e.setVisual('${id}',{instant:true});e.scale=.6;e.maxScale=.6;
-      const a={bands:new Float32Array(32),peaks:new Float32Array(32),kick:0,snare:0,hat:0,energy:.65,level:.4,beat:0};
+      const a={bands:new Float32Array(32),peaks:new Float32Array(32),flux:new Float32Array(32),hit:0,beatIdx:0,snareN:0,kick:0,snare:0,hat:0,energy:.65,level:.4,beat:0};
       const pal={dark:[2,4,8],mid:[25,180,135],hi:[185,240,225],hot:[220,95,180]};
       const wave=new Float32Array(128),srgb=Array.from({length:256},(_,v)=>{v/=255;return v<=.04045?v/12.92:Math.pow((v+.055)/1.055,2.4)});
       let prev=null,lastMean=0,maxMeanDelta=0,maxArea=.0,totalMean=0;
       const frames=['nightdrive','bloop'].includes('${id}')?240:60;
       for(let n=0;n<frames;n++){
         const t=90+n/30,phase=(t*2.5)%1,hit=Math.exp(-phase*10);
-        a.beat=phase;a.kick=hit;a.snare=hit*.7;a.hat=hit*.5;
+        a.beatIdx=Math.floor(t*2.5);a.snareN=Math.floor(t*1.25);a.hit=hit;a.flux.fill(hit*.5);a.beat=phase;a.kick=hit;a.snare=hit*.7;a.hat=hit*.5;
         for(let k=0;k<32;k++){a.bands[k]=.15+hit*.7*(1-k/40);a.peaks[k]=a.bands[k];}
         for(let k=0;k<128;k++)wave[k]=Math.sin(k*.21)*(.15+hit*.75);
         pushHistory(a.bands,d);setWave(wave,d);e.cur.clock.seconds=t;e.cur.clock.beats=t*2.5;

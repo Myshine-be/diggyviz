@@ -160,14 +160,12 @@ void main() {
 export const FINAL_FRAG = /* glsl */ `#version 300 es
 precision highp float;
 uniform sampler2D uScene, uBloom; uniform vec2 uRes; uniform float uBloomAmt, uTime, uGrain, uGrade;
-uniform float uPunchKick, uPunchSnare; // global hit response (kick: short zoom + exposure, snare/clap: bloom flash)
 out vec4 fragColor;
 float h(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
 void main() {
   vec2 uv = gl_FragCoord.xy / uRes;
-  vec2 zv = 0.5 + (uv - 0.5) * (1.0 - 0.028 * uPunchKick);
-  vec3 c = texture(uScene, zv).rgb * (1.0 + 0.22 * uPunchKick) + texture(uBloom, zv).rgb * (uBloomAmt + 0.6 * uPunchSnare);
+  vec3 c = texture(uScene, uv).rgb + texture(uBloom, uv).rgb * uBloomAmt;
   // neon grade: hue flows softly across the screen and over time; greys and whites are untouched
   float ga = uGrade * 0.6 * sin(uv.x * 2.6 - uv.y * 1.9 + uTime * 0.12) + uGrade * 0.25 * sin(uv.y * 3.3 + uTime * 0.07);
   const vec3 gk = vec3(0.57735);
