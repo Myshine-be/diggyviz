@@ -1,6 +1,6 @@
-# Review Spotify-verbinding en vertraging — 27 oktober 2026
+# Review 2.6.2 — Spotify-verbinding en vertraging — 27 oktober 2026
 
-Basis: Claude 2.5.1 / 2.6.0, commit 4470cf0. Zijn wijzigingen stonden al op main.
+Basis: Claude 2.5.1 / 2.6.0, commit 4470cf0. Zijn wijzigingen stonden al op main. Tijdens deze review kwam 3d7f11e erbij (gekleurde Urchin-treffers en surfaceSwitching exclude); die wijzigingen zijn behouden.
 
 ## Bevinding
 Spotify-inloggen koppelt nummerinformatie, hoes en positie. De officiële Web Playback SDK kan muziek afspelen, maar heeft geen API voor ruwe audiosamples voor onze analyser. Een ingebouwde Spotify-player lost de echte audioanalyse dus niet op. De nieuw toegevoegde Computergeluid-optie gebruikt een ingestelde OS-loopback-ingang; dat kan herhaald tabblad delen vervangen. Toestemming en de audio-routing blijven afhankelijk van browser en toestel.
@@ -22,4 +22,4 @@ Bronnen: https://developer.spotify.com/documentation/web-playback-sdk/reference 
 De snellere envelope, analyser-smoothing 0.3 en live nieuwste history-rij van Claude zijn behouden. De envelope haalt in de test 90% binnen 25 ms; dat meet geen totale audio-naar-beeldvertraging. Windows-monitoring van een virtuele kabel, Bluetooth, FFT-vensters en het renderen voegen afzonderlijk vertraging toe. Een rechtstreekser verbindingsscherm bewijst geen snellere synchronisatie.
 
 ## Verificatie
-71 Node-tests geslaagd, inclusief autoplay-wachtstand, late streams, ontbrekende apparaten en gewijzigde standaardingang. Browsercontrole toegevoegd voor echte Web Audio met gesimuleerde OS-apparaatverwerving: computer → microfoon → computer, plus annuleren tijdens overschakelen. CI-resultaat staat bij de review-PR; fysieke Windows-routing, Spotify-login, Bluetooth en iPhone-prestaties zijn niet hier getest.
+71 Node-tests geslaagd, inclusief autoplay-wachtstand, late streams, ontbrekende apparaten en gewijzigde standaardingang. Browsercontrole toegevoegd voor echte Web Audio met gesimuleerde OS-apparaatverwerving: computer → microfoon → computer, plus annuleren tijdens overschakelen. De volledige browsercontrole heeft 28 checks; resultaten staan bij [PR #6](https://github.com/Myshine-be/diggyviz/pull/6). De Landscape-fixture reproduceert vier zwarte beelden met de oude shader en vier zichtbare beelden met de fix; fysieke Windows-routing, Spotify-login, Bluetooth en iPhone-prestaties zijn niet hier getest.

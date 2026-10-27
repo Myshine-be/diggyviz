@@ -135,7 +135,7 @@ own music > computer sound > tab sound > microphone. Starting it stops the micro
 Spotify cannot deliver audio itself: its Web Playback SDK is DRM-protected and audio-analysis/audio-features are
 closed for apps created after Nov 2024 — do not build on those. Windows setup steps live in index.html (#sysGuide).
 
-## 2.6.1 review
+## 2.6.2 review
 - Spotify login supplies metadata, not PCM/FFT samples. Computer sound is an OS loopback input, not a direct Spotify audio API. Do not claim that it eliminates end-to-end latency.
 - Audio inputs are mutually exclusive when selected; latest user choice cancels competing pending starts. A saved automatic start must not override a newer user choice.
 - `createListener` passes an AbortSignal to acquisition. Check it between permission probes, enumeration and final capture; release late streams without saving their device.

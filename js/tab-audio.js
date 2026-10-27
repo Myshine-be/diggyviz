@@ -23,7 +23,7 @@ export const TAB_MESSAGES = {
 const SHARE_OPTIONS = {
   video: true,                                  // Chrome requires video to offer audio; stopped right away
   audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-  preferCurrentTab: false, selfBrowserSurface: "exclude", surfaceSwitching: "include", systemAudio: "include",
+  preferCurrentTab: false, selfBrowserSurface: "exclude", surfaceSwitching: "exclude", systemAudio: "include",
 };
 
 /** Keep only the audio track of a share; throws NoAudio when the tab's audio was not shared. */
