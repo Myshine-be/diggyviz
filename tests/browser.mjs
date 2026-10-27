@@ -114,6 +114,24 @@ try {
     assert.ok(result.compiled && result.glError === 0 && result.litPixels > 100, JSON.stringify(result));
     results.push(result); await new Promise(r => setTimeout(r, 300)); await screenshot(id);
   }
+  const ridge=await evaluate(`(async()=>{
+    const {audioData,pushHistory}=await import('./js/audio-data.js');const e=diggy.engine;
+    const vis=e.visuals.find(v=>v.id==='landscape');
+    e.visuals.push({...vis,id:'qa-landscape-before',frag:vis.frag.replace(' * smoothstep(0.0, 1.2, d);',';')});
+    const a={bands:new Float32Array(32).fill(1),peaks:new Float32Array(32).fill(1),flux:new Float32Array(32).fill(1),kick:1,snare:1,hat:1,energy:1,level:1,hit:1,beat:0};
+    for(let i=0;i<65;i++)pushHistory(a.bands);
+    const checks=[];
+    for(const id of ['qa-landscape-before','landscape'])for(const time of [0,1/9,2/9,.001]){
+      e.setVisual(id,{instant:true});
+      e.render({time,dt:1/60,sceneDt:0,bpm:120,songTime:30,audio:a,pal:{dark:[2,4,8],mid:[30,220,130],hi:[140,250,220],hot:[245,60,160]},drop:0,seed:11,sound:audioData});
+      const gl=e.gl,p=new Uint8Array(e.W*e.H*4);gl.readPixels(0,0,e.W,e.H,gl.RGBA,gl.UNSIGNED_BYTE,p);let lit=0;
+      for(let i=0;i<p.length;i+=4)if(p[i]+p[i+1]+p[i+2]>30)lit++;
+      checks.push({id,time,lit,glError:gl.getError()});
+    }e.visuals.splice(e.visuals.findIndex(v=>v.id==='qa-landscape-before'),1);return checks;
+  })()`);
+  assert.ok(ridge.some(r=>r.id==='qa-landscape-before'&&r.lit<100),'fixture must reproduce the original black frame');
+  assert.ok(ridge.filter(r=>r.id==='landscape').every(r=>r.lit>100&&r.glError===0),JSON.stringify(ridge));
+  results.push({test:'loud newborn Landscape ridges do not black out the frame',checks:ridge});
   // Story clocks must survive a real onTrack callback, pause, and the 45-second carousel boundary.
   for (const id of ['nightdrive','bloop']) {
     const result = await evaluate(`(async()=>{

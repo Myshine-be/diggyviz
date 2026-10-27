@@ -16,6 +16,8 @@ Bronnen: https://developer.spotify.com/documentation/web-playback-sdk/reference 
 - Invoerlatentie gebruikt alleen de optionele apparaatmeting. De interne outputbuffer werd eerder onterecht als invoervertraging gepresenteerd.
 - Inlog-, routing- en toestemmingsuitleg verduidelijkt; desktop-loopback niet aangeboden op iOS/iPadOS/Android.
 
+- Extra rendererfout gevonden bij de volledige browsercontrole: een pas verschenen Landscape-bergkam kon bij hoge audio het beeld al afdekken terwijl zijn eigen licht nog naar nul vervaagde. Afdekking verschijnt nu samen met de kam; een test controleert luide nieuwe rijen op vaste tijden.
+
 ## Vertraging
 De snellere envelope, analyser-smoothing 0.3 en live nieuwste history-rij van Claude zijn behouden. De envelope haalt in de test 90% binnen 25 ms; dat meet geen totale audio-naar-beeldvertraging. Windows-monitoring van een virtuele kabel, Bluetooth, FFT-vensters en het renderen voegen afzonderlijk vertraging toe. Een rechtstreekser verbindingsscherm bewijst geen snellere synchronisatie.
 
