@@ -191,6 +191,8 @@ export function createListener({ onStatus = () => {}, onChange = () => {}, media
     get receiving() { return !!res && res.ctx.state === "running" && !res.stream.getAudioTracks()[0]?.muted; },
     get starting() { return !!pending; },
     get bpm() { return res?.st.bpm ?? 120; },
+    /** input latency of the running AudioContext in seconds (diagnostics) */
+    get latency() { return res?.ctx ? (res.ctx.baseLatency ?? 0) : null; },
     start() {
       if (L.active) return Promise.resolve(true);
       if (pending) return pending;

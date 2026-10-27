@@ -124,3 +124,13 @@ Visuals must land on the hit. Measured with an AnalyserNode emulation (kick onse
 detection ~9 ms; band levels 90 % about 20 ms faster than in 2.5.0. Keep: analyser smoothing 0.3, envelope
 ATTACK 110, the newest spectrum-history row live between 30 Hz pushes (`feedHistory`). Covered by
 `tests/latency.test.mjs`.
+
+## Computer sound (2.6) — the default way to follow Spotify on a computer
+`js/system-audio.js`: listens to the computer's own output through a loopback input (Windows "Stereomix",
+VB-Audio "CABLE Output", Mac BlackHole). `findLoopback()` picks it by name; the chosen deviceId is saved in
+`rv.sysDevice` (falls back to a name search when the id changed), `rv.sys` remembers "on" and only changes when
+the user switches it (a failed automatic start retries next time). With the permission already granted it starts
+on page load; the AudioContext may still need one tap (browser rule). Input order in `soundInput()`:
+own music > computer sound > tab sound > microphone. Starting it stops the microphone and tab sound.
+Spotify cannot deliver audio itself: its Web Playback SDK is DRM-protected and audio-analysis/audio-features are
+closed for apps created after Nov 2024 — do not build on those. Windows setup steps live in index.html (#sysGuide).

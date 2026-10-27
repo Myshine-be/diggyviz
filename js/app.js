@@ -13,6 +13,7 @@ import { createDemoSource } from "./sources/demo.js";
 import { createTempoLookup } from "./tempo-lookup.js";
 import { createListener } from "./listen.js";
 import { createTabListener } from "./tab-audio.js";
+import { createSystemListener, listInputs, permissionGranted } from "./system-audio.js";
 import { createFilePlayer } from "./file-player.js";
 import { audioData, setWave, feedHistory, synthWave, resetAudioData, WAVE_N } from "./audio-data.js";
 
@@ -36,11 +37,14 @@ let tempoOrigin = "default";
 let tempoAuto = false;   // true while the tempo comes from the Deezer lookup (not tapped)
 const listener = createListener({ onStatus: (m, err) => status(m, err), onChange: () => listenChanged() });
 const tabIn = createTabListener({ onStatus: (m, err) => status(m, err), onChange: () => tabChanged() });
+const sysIn = createSystemListener({ onStatus: (m, err) => status(m, err), onChange: () => sysChanged(),
+  getDevice: () => store.get("sysDevice", ""), setDevice: (id) => store.set("sysDevice", id) });
 const player = createFilePlayer({ onStatus: (m, err) => status(m, err), onChange: () => showPlayer() });
 
 // Which real sound drives the visuals right now: own music > shared tab > microphone > none (simulated rhythm).
 function soundInput() {
   if (sourceName === "file" && player.active) return { kind: "file", io: player };
+  if (sysIn.active) return { kind: "system", io: sysIn };
   if (tabIn.active) return { kind: "tab", io: tabIn };
   if (listener.active) return { kind: "mic", io: listener };
   return null;
@@ -98,13 +102,14 @@ function loadTempo(defBpm = 120) {
 function showTempo() {
   const inp = soundInput();
   const source = inp ? (inp.io.receiving ? inp.kind : inp.kind === "file" ? "paused" : "interrupted") : tempoOrigin;
-  const labels = { file: "LIVE", tab: "LIVE", paused: "PAUZE", mic: "MIC", interrupted: "WACHT", found: "AUTO", tapped: "BPM", demo: "DEMO", loading: "ZOEK", missing: "SCHAT", unavailable: "SCHAT", default: "SCHAT" };
+  const labels = { file: "LIVE", tab: "LIVE", system: "LIVE", paused: "PAUZE", mic: "MIC", interrupted: "WACHT", found: "AUTO", tapped: "BPM", demo: "DEMO", loading: "ZOEK", missing: "SCHAT", unavailable: "SCHAT", default: "SCHAT" };
   const notes = {
     file: "Eigen muziek: het echte geluid, exact op de beat. Tempo gemeten.",
     tab: "Tab-geluid: het echte geluid van het tabblad. Tempo gemeten.",
+    system: "Computergeluid: het echte geluid van je computer. Tempo gemeten.",
     paused: "Muziek gepauzeerd.",
     mic: "Microfoon: gemeten geluid; het tempo is een schatting.",
-    interrupted: "Microfoon onderbroken. Tik op het scherm om opnieuw te proberen.",
+    interrupted: "Het geluid wacht op een tik: tik of klik één keer op het scherm (regel van de browser).",
     found: "Tempo via Deezer. Tik mee om de timing bij te stellen; geen geluidsanalyse.",
     tapped: "Tempo en timing ingesteld met jouw tikken.", demo: "Demoritme; geen analyse van de muziek.",
     loading: "Tempo wordt opgezocht. Tot dan wordt 120 BPM gebruikt.",
@@ -274,7 +279,8 @@ function showDiag(inp) {
   $("diag").textContent = [
     `${fps} fps · ${e ? e.frameMs.toFixed(1) : "–"} ms/frame`,
     `render ${e?.RW ?? "–"}×${e?.RH ?? "–"} van ${c.width}×${c.height} · schaal ${e ? e.scale.toFixed(2) : "–"}`,
-    `visual ${e?.currentVisual?.id ?? "–"} · invoer ${inp ? inp.kind : "gesimuleerd"}`,
+    `visual ${e?.currentVisual?.id ?? "–"} · invoer ${inp ? inp.kind : "gesimuleerd"}${inp?.io.inputName ? " (" + inp.io.inputName + ")" : ""}`,
+    `invoerlatentie ${inp && Number.isFinite(inp.io.latency) ? Math.round(inp.io.latency * 1000) + " ms" : "–"}`,
   ].join("\n");
 }
 
@@ -376,6 +382,62 @@ document.querySelector("#trackPill .progress")?.addEventListener("click", (e) =>
   player.seek((e.clientX - r.left) / r.width);
 });
 
+/* computer sound: the computer's own output via a loopback input (Stereomix / VB-Cable). One-time setup,
+   then it starts by itself: no sharing every time. Spotify still supplies title, cover and colours. */
+let sysReq = 0;
+// The saved choice only changes when you switch it yourself: a failed automatic start retries next time.
+function sysChanged() { showSys(); }
+function showSys() {
+  const on = sysIn.active || sysIn.starting;
+  $("sysBtn").setAttribute("aria-pressed", String(on));
+  $("sysChk").checked = on;
+  showTempo();
+}
+async function fillDevices() {
+  const sel = $("sysDevice"), saved = store.get("sysDevice", "");
+  const list = await listInputs();
+  sel.length = 1;
+  for (const d of list) { const o = document.createElement("option"); o.value = d.deviceId; o.textContent = d.label || "Ingang zonder naam (eerst toestaan)"; sel.append(o); }
+  sel.value = list.some((d) => d.deviceId === saved) ? saved : "";
+}
+async function setSys(on) {
+  const my = ++sysReq;
+  if (on) {
+    const pend = sysIn.start();
+    status("Computergeluid starten…");
+    showSys();
+    const ok = await pend;
+    if (my !== sysReq) return;
+    if (ok) {
+      store.set("sys", true);
+      // one real input is enough: the microphone and a tab share are no longer needed
+      if (tabIn.active || tabIn.starting) setTab(false);
+      if (listener.active || listener.starting) setListen(false);
+      status(`Computergeluid aan${sysIn.inputName ? " (" + sysIn.inputName + ")" : ""}: de visuals volgen wat je computer afspeelt.`);
+      fillDevices();
+    } else { $("sysGuide").open = true; }
+  } else { sysIn.stop(); store.set("sys", false); status("Computergeluid uit."); }
+  sysChanged();
+}
+$("sysBtn").hidden = !sysIn.supported;
+$("sysRow").hidden = !sysIn.supported;
+$("sysBtn").addEventListener("click", (e) => { e.stopPropagation(); setSys(!(sysIn.active || sysIn.starting)); });
+$("sysChk").addEventListener("change", (e) => setSys(e.target.checked));
+$("sysDevice").addEventListener("change", (e) => {
+  store.set("sysDevice", e.target.value);
+  if (sysIn.active) { sysIn.stop(); setSys(true); }
+});
+// Saved "on": start right away when the browser already allows the input, else on the first tap.
+if (sysIn.supported && store.get("sys", false)) {
+  permissionGranted().then((granted) => {
+    if (granted) setSys(true);
+    else document.addEventListener("pointerdown", function resume(e) {
+      document.removeEventListener("pointerdown", resume, true);
+      if (!sysIn.active && !sysIn.starting && e.target?.id !== "sysBtn" && e.target?.id !== "sysChk") setSys(true);
+    }, true);
+  });
+}
+
 /* tab sound (computer): analyse the audio of the Spotify web-player tab */
 function tabChanged() {
   const on = tabIn.active || tabIn.starting;
@@ -440,7 +502,7 @@ async function keepAwake() { try { if (!wakeLock && document.visibilityState ===
 document.addEventListener("visibilitychange", () => { last = performance.now(); if (document.visibilityState === "visible") keepAwake(); });
 
 /* settings + onboarding */
-$("settingsBtn").addEventListener("click", () => { refreshSpotifyState(); $("settings").hidden = false; });
+$("settingsBtn").addEventListener("click", () => { refreshSpotifyState(); $("settings").hidden = false; if (sysIn.supported) fillDevices(); });
 $("closeSettings").addEventListener("click", () => { $("settings").hidden = true; wake(); });
 $("settings").addEventListener("click", (e) => { if (e.target === $("settings")) { $("settings").hidden = true; wake(); } });
 document.querySelectorAll(".seg button[data-src]").forEach((b) => b.addEventListener("click", () => useSource(b.dataset.src)));
@@ -494,4 +556,4 @@ $("version").textContent = "DiggyViz " + CONFIG.VERSION;
 })();
 
 // test/debug hook
-window.diggy = { player, tabIn, get soundInput() { return soundInput()?.kind ?? null; }, setVisual, stepVisual, get engine() { return engine; }, onTrack, useSource, audio, setListen, get listening() { return listener.active; }, get tempo() { return { ...tempo, auto: tempoAuto }; } };
+window.diggy = { player, tabIn, sysIn, get soundInput() { return soundInput()?.kind ?? null; }, setVisual, stepVisual, get engine() { return engine; }, onTrack, useSource, audio, setListen, get listening() { return listener.active; }, get tempo() { return { ...tempo, auto: tempoAuto }; } };

@@ -61,6 +61,7 @@
     <div class="controls">
       <button class="ctl tap" id="tap" aria-label="Tik mee op de beat">120 <small>BPM</small></button>
       <button class="ctl" id="autoBtn" aria-pressed="true">Auto</button>
+      <button class="ctl" id="sysBtn" aria-pressed="false" hidden aria-label="Computergeluid: reageer op wat je computer afspeelt">🔊 Computer</button>
       <button class="ctl" id="listenBtn" aria-pressed="false" aria-label="Luistermodus: de microfoon hoort de echte beat">🎤 Luister</button>
       <button class="ctl" id="tabBtn" aria-pressed="false" hidden aria-label="Tab-geluid: analyseer het geluid van het Spotify-tabblad">🖥 Tab-geluid</button>
       <button class="ctl" id="fsBtn">Volledig scherm</button>
@@ -137,13 +138,28 @@
       <h3>Visuals</h3>
       <label class="switch"><input type="checkbox" id="autoChk" checked> Automatisch wisselen (45 s; verhaalwerelden 2 minuten)</label>
       <p class="note" id="tempoStatus" role="status"></p>
+      <div id="sysRow" hidden>
+        <label class="switch"><input type="checkbox" id="sysChk"> Computergeluid: reageer op wat je computer afspeelt (aanrader met Spotify)</label>
+        <p class="note">DiggyViz luistert rechtstreeks naar het geluid van je computer, ook van de Spotify-app. Eén keer instellen, daarna start het vanzelf: niets meer delen. Er wordt niets opgenomen of verstuurd.</p>
+        <label class="field">Geluidsingang <select id="sysDevice"><option value="">Automatisch (Stereomix / CABLE Output)</option></select></label>
+        <details id="sysGuide">
+          <summary>Eenmalig instellen op Windows (2 minuten)</summary>
+          <ol class="note steps">
+            <li>Druk op <b>Windows-toets + R</b>, typ <b>mmsys.cpl</b> en druk op Enter.</li>
+            <li>Kies het tabblad <b>Opnemen</b>. Klik met rechts in de lijst en vink <b>Uitgeschakelde apparaten weergeven</b> aan.</li>
+            <li>Klik met rechts op <b>Stereomix</b> en kies <b>Inschakelen</b>. Klaar met Windows.</li>
+            <li>Zet hier <b>Computergeluid</b> aan en klik bij de vraag van Chrome op <b>Toestaan</b>. Vanaf nu start het vanzelf.</li>
+          </ol>
+          <p class="note"><b>Geen Stereomix in de lijst?</b> Installeer het gratis <b>VB-Audio Cable</b> (vb-audio.com/Cable). Zet daarna in Windows bij Instellingen → Systeem → Geluid → Volumemixer de uitvoer van Spotify op <b>CABLE Input</b>. Zodat je zelf blijft horen: in mmsys.cpl → Opnemen → <b>CABLE Output</b> → Eigenschappen → tabblad Luisteren → <b>Luisteren naar dit apparaat</b> aan, met je luidsprekers of koptelefoon.</p>
+        </details>
+      </div>
       <div id="listenRow">
         <label class="switch"><input type="checkbox" id="listenChk"> Luistermodus (microfoon): reageer op het geluid</label>
         <p class="note">De microfoon hoort de muziek in de kamer en schat de beat en het tempo. Herkenning kan afwijken bij achtergrondgeluid of ingewikkelde ritmes. Het geluid blijft op je toestel: niets wordt opgenomen of verstuurd. Werkt het best als de muziek uit een box of tv komt.</p>
       </div>
       <div id="tabRow" hidden>
         <label class="switch"><input type="checkbox" id="tabChk"> Tab-geluid (computer): analyseer het geluid van een tabblad</label>
-        <p class="note">Open Spotify in een ander Chrome-tabblad (open.spotify.com) en speel een nummer. Zet dan Tab-geluid aan, kies dat tabblad en zet <b>Tabblad-audio delen</b> aan. DiggyViz ziet nu exact wat je hoort, ook via een koptelefoon. Er wordt niets opgenomen.</p>
+        <p class="note">Reserve als Computergeluid niet ingesteld is (je moet dan elke keer delen). Open Spotify in een ander Chrome-tabblad (open.spotify.com) en speel een nummer. Zet dan Tab-geluid aan, kies dat tabblad en zet <b>Tabblad-audio delen</b> aan. DiggyViz ziet nu exact wat je hoort, ook via een koptelefoon. Er wordt niets opgenomen.</p>
       </div>
       <p class="note">Zonder luistermodus volgt het ritme de positie in het nummer. Het tempo wordt per nummer automatisch opgezocht (BPM-knop toont dan AUTO); tik 1× op de beat om de timing bij te stellen, of 3× of meer om zelf het tempo te tikken. Spotify en Last.fm leveren zelf geen geluidsanalyse. Bij Last.fm is de afspeelpositie geschat.</p>
       <p class="note">Night Drive en Bloop hebben na 90 seconden kijken een verrassing. Met Auto uit blijft de alien Bloop achtervolgen tot je van visual wisselt. Hun verhaal loopt door bij een nieuw nummer; pauze en achtergrondtijd tellen niet mee.</p>
