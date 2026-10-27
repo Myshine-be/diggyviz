@@ -12,8 +12,10 @@ const LOOPBACK = [
 /** The first input that is a loopback of the computer's own sound, or null. Pure (tested). */
 export function findLoopback(devices = []) {
   const inputs = devices.filter((d) => d && d.kind === "audioinput" && d.deviceId && d.deviceId !== "communications");
-  for (const re of LOOPBACK) {
-    const hit = inputs.find((d) => re.test(d.label || ""));
+  // prefer the device itself over the "default" alias, so a later change of the Windows default doesn't move it
+  const real = inputs.filter((d) => d.deviceId !== "default"), alias = inputs.filter((d) => d.deviceId === "default");
+  for (const list of [real, alias]) for (const re of LOOPBACK) {
+    const hit = list.find((d) => re.test(d.label || ""));
     if (hit) return hit;
   }
   return null;

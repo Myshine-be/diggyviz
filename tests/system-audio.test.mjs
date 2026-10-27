@@ -14,6 +14,7 @@ test('finds Windows Stereomix in Dutch and English, VB-Cable and BlackHole; igno
   assert.equal(findLoopback([dev('BlackHole 2ch', 'bh')])?.deviceId, 'bh');
   assert.equal(findLoopback([dev('Stereomix', 'out', 'audiooutput'), dev('Headset Microphone')]), null);
   assert.equal(findLoopback([dev('Standaard - Stereomix', 'default'), dev('Stereomix', 'communications')])?.deviceId, 'default');
+  assert.equal(findLoopback([dev('Standaard - Stereo-mix (Realtek(R) Audio)', 'default'), dev('Microfoonmatrix (Realtek(R) Audio)', 'm'), dev('Stereo-mix (Realtek(R) Audio)', 'sm2')])?.deviceId, 'sm2');
 });
 
 test('first start: asks once, finds the loopback by name, remembers it and opens exactly that input', async () => {
