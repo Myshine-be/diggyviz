@@ -1,6 +1,6 @@
 // Computer sound: listen to what the computer itself plays (Spotify app or web player), via a loopback input
 // such as Windows "Stereomix" or the free VB-Audio Cable ("CABLE Output"), or BlackHole on a Mac.
-// Chrome remembers the permission per site, so after a one-time setup nothing has to be shared again.
+// Chrome remembers the permission per site, so a configured input can be reused while permission remains granted.
 // Same analysis as listening mode (js/listen.js); nothing is recorded or sent.
 import { createListener } from "./listen.js";
 
@@ -46,35 +46,46 @@ export function createSystemListener({ onStatus, onChange, media = () => navigat
   let chosen = "";
   const L = createListener({
     onStatus, onChange, media, ...rest,
-    acquire: async () => {
+    acquire: async ({ signal }) => {
+      const check = () => { if (signal.aborted) throw Object.assign(new Error("Geannuleerd"), { name: "AbortError" }); };
+      const capture = async (id) => {
+        check();
+        const stream = await media().getUserMedia(constraints(id));
+        if (signal.aborted) { stream.getTracks().forEach(t => t.stop()); check(); }
+        chosen = stream.getAudioTracks()[0]?.label || "";
+        setDevice(id);
+        return stream;
+      };
       let id = getDevice();
+      // Never retain a moving OS alias: it can silently become the microphone.
+      if (id === "default" || id === "communications") { id = ""; setDevice(""); }
       if (id) {
         // saved input first; device ids can change (driver update, new profile): then search by name again
         try {
-          const stream = await media().getUserMedia(constraints(id));
-          chosen = stream.getAudioTracks()[0]?.label || "";
-          return stream;
+          return await capture(id);
         } catch (e) {
+          check();
           if (e?.name !== "OverconstrainedError" && e?.name !== "NotFoundError") throw e;
           id = ""; setDevice("");
         }
       }
       if (!id) {
         let found = findLoopback(await listInputs(media));
+        check();
         if (!found) {
           // names are hidden until the first permission: ask once, then look again
           const probe = await media().getUserMedia({ audio: true });
           probe.getTracks().forEach((t) => t.stop());
+          check();
           found = findLoopback(await listInputs(media));
         }
+        check();
         if (!found) throw Object.assign(new Error("Geen loopback-ingang"), { name: "NoLoopback" });
-        id = found.deviceId; setDevice(id);
+        id = found.deviceId;
       }
-      const stream = await media().getUserMedia(constraints(id));
-      chosen = stream.getAudioTracks()[0]?.label || "";
-      return stream;
+      return capture(id);
     },
-    isSupported: () => !!media()?.getUserMedia && !!media()?.enumerateDevices && !/iP(hone|ad|od)/.test(typeof navigator !== "undefined" ? navigator.userAgent : ""),
+    isSupported: () => !!media()?.getUserMedia && !!media()?.enumerateDevices && !(typeof navigator !== "undefined" && (/iP(hone|ad|od)|Android/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1))),
     messages: SYSTEM_MESSAGES,
   });
   Object.defineProperty(L, "inputName", { get: () => (L.active ? chosen : "") });

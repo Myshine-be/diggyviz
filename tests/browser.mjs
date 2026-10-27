@@ -101,11 +101,37 @@ try {
       window.__step(1/60);
       const gl=e.gl, pixels=new Uint8Array(e.W*e.H*4);gl.readPixels(0,0,e.W,e.H,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
       let lit=0;for(let i=0;i<pixels.length;i+=4)if(pixels[i]+pixels[i+1]+pixels[i+2]>30)lit++;
-      return {id:e.currentVisual.id,compiled:!!e.programs.get(${JSON.stringify(id)}),glError:gl.getError(),litPixels:lit};
+      let debug=null;
+      if(lit===0){
+        const pr=e.programs.get(e.currentVisual.id),uniforms={};
+        for(const [name,loc] of Object.entries(pr.loc)){const v=gl.getUniform(pr.prog,loc);uniforms[name]=ArrayBuffer.isView(v)?Array.from(v):v;}
+        const sample=new Float32Array(4);gl.bindFramebuffer(gl.FRAMEBUFFER,e.cur.t[e.cur.i].fb);gl.readPixels(Math.floor(e.RW/2),Math.floor(e.RH/2),1,1,gl.RGBA,gl.FLOAT,sample);gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+        window.__step(1/60);const again=new Uint8Array(e.W*e.H*4);gl.readPixels(0,0,e.W,e.H,gl.RGBA,gl.UNSIGNED_BYTE,again);let next=0;for(let i=0;i<again.length;i+=4)if(again[i]+again[i+1]+again[i+2]>30)next++;
+        debug={uniforms,sample:Array.from(sample),next};
+      }
+      return {debug,id:e.currentVisual.id,compiled:!!e.programs.get(${JSON.stringify(id)}),glError:gl.getError(),litPixels:lit,queuedFrames:window.__frames.length,lost:gl.isContextLost(),size:[e.W,e.H],drawSize:[gl.drawingBufferWidth,gl.drawingBufferHeight],defaultFramebuffer:gl.getParameter(gl.FRAMEBUFFER_BINDING)===null};
     })()`);
     assert.ok(result.compiled && result.glError === 0 && result.litPixels > 100, JSON.stringify(result));
     results.push(result); await new Promise(r => setTimeout(r, 300)); await screenshot(id);
   }
+  const ridge=await evaluate(`(async()=>{
+    const {audioData,pushHistory}=await import('./js/audio-data.js');const e=diggy.engine;
+    const vis=e.visuals.find(v=>v.id==='landscape');
+    e.visuals.push({...vis,id:'qa-landscape-before',frag:vis.frag.replace('(1.0 - smoothstep(-px, px, p.y - y)) * smoothstep(0.0, 1.2, d)', '(1.0 - smoothstep(-px, px, p.y - y))')});
+    const a={bands:new Float32Array(32).fill(1),peaks:new Float32Array(32).fill(1),flux:new Float32Array(32).fill(1),kick:1,snare:1,hat:1,energy:1,level:1,hit:1,beat:0};
+    for(let i=0;i<65;i++)pushHistory(a.bands);
+    const checks=[];
+    for(const id of ['qa-landscape-before','landscape'])for(const time of [0,1/9,2/9,.001]){
+      e.setVisual(id,{instant:true});
+      e.render({time,dt:1/60,sceneDt:0,bpm:120,songTime:30,audio:a,pal:{dark:[2,4,8],mid:[30,220,130],hi:[140,250,220],hot:[245,60,160]},drop:0,seed:11,sound:audioData});
+      const gl=e.gl,p=new Uint8Array(e.W*e.H*4);gl.readPixels(0,0,e.W,e.H,gl.RGBA,gl.UNSIGNED_BYTE,p);let lit=0;
+      for(let i=0;i<p.length;i+=4)if(p[i]+p[i+1]+p[i+2]>30)lit++;
+      checks.push({id,time,lit,glError:gl.getError()});
+    }e.visuals.splice(e.visuals.findIndex(v=>v.id==='qa-landscape-before'),1);return checks;
+  })()`);
+  assert.ok(ridge.some(r=>r.id==='qa-landscape-before'&&r.lit<100),'fixture must reproduce the original black frame');
+  assert.ok(ridge.filter(r=>r.id==='landscape').every(r=>r.lit>100&&r.glError===0),JSON.stringify(ridge));
+  results.push({test:'loud newborn Landscape ridges do not black out the frame',checks:ridge});
   // Story clocks must survive a real onTrack callback, pause, and the 45-second carousel boundary.
   for (const id of ['nightdrive','bloop']) {
     const result = await evaluate(`(async()=>{
@@ -244,6 +270,32 @@ try {
   })()`);
   assert.ok(helperAudio.ok&&helperAudio.helper&&helperAudio.level>0&&helperAudio.range>.1&&helperAudio.closed&&helperAudio.ended,JSON.stringify(helperAudio));
   results.push({test:'same-origin helper stream into main-window Web Audio',...helperAudio});
+
+  // Exercise the actual controls and real Web Audio while faking only OS device acquisition.
+  const switching=await evaluate(`(async()=>{
+    const media=navigator.mediaDevices,oldGet=media.getUserMedia,oldList=media.enumerateDevices;
+    const c=new AudioContext();await c.resume();const o=c.createOscillator(),g=c.createGain(),dest=c.createMediaStreamDestination();
+    o.frequency.value=140;g.gain.value=.08;o.connect(g);g.connect(dest);o.start();
+    const streams=[];let resolveLate;
+    media.enumerateDevices=async()=>[{kind:'audioinput',deviceId:'qa-loopback',label:'Stereomix QA'}];
+    media.getUserMedia=async()=>{const s=dest.stream.clone();streams.push(s);return s;};
+    try{
+      await diggy.setSys(true);const system=diggy.soundInput==='system';
+      await diggy.setListen(true);const mic=diggy.soundInput==='mic'&&!diggy.sysIn.active;
+      await diggy.setSys(true);const back=diggy.soundInput==='system'&&!diggy.listening;
+      await diggy.setSys(false);
+      media.getUserMedia=()=>new Promise(r=>resolveLate=r);
+      const pending=diggy.setSys(true);
+      media.getUserMedia=async()=>{const s=dest.stream.clone();streams.push(s);return s;};
+      await diggy.setListen(true);
+      const late=dest.stream.clone();streams.push(late);resolveLate(late);await pending;
+      const latest=diggy.soundInput==='mic'&&!diggy.sysIn.active&&late.getTracks().every(t=>t.readyState==='ended');
+      await diggy.setListen(false);await diggy.setSys(false);
+      return {system,mic,back,latest,clean:streams.every(s=>s.getTracks().every(t=>t.readyState==='ended'))};
+    }finally{media.getUserMedia=oldGet;media.enumerateDevices=oldList;o.stop();dest.stream.getTracks().forEach(t=>t.stop());await c.close();}
+  })()`);
+  assert.ok(Object.values(switching).every(Boolean),JSON.stringify(switching));
+  results.push({test:'computer/microphone switching and late capture cancellation',...switching});
 
   // Every visual at rest, kick and clap, with measured-data uniforms and changing hit counters.
   await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});

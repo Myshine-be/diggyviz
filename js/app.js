@@ -109,7 +109,7 @@ function showTempo() {
     system: "Computergeluid: het echte geluid van je computer. Tempo gemeten.",
     paused: "Muziek gepauzeerd.",
     mic: "Microfoon: gemeten geluid; het tempo is een schatting.",
-    interrupted: "Het geluid wacht op een tik: tik of klik één keer op het scherm (regel van de browser).",
+    interrupted: "Geluidsingang onderbroken of geblokkeerd. Tik op het scherm; controleer de ingang als dit blijft staan.",
     found: "Tempo via Deezer. Tik mee om de timing bij te stellen; geen geluidsanalyse.",
     tapped: "Tempo en timing ingesteld met jouw tikken.", demo: "Demoritme; geen analyse van de muziek.",
     loading: "Tempo wordt opgezocht. Tot dan wordt 120 BPM gebruikt.",
@@ -222,7 +222,7 @@ async function startLogin() {
 
 function refreshSpotifyState() {
   const ok = spotify.isLoggedIn();
-  $("spState").textContent = ok ? "Ingelogd. DiggyViz volgt wat je op Spotify speelt." : "Niet ingelogd. Je Spotify-account moet door Mo toegevoegd zijn.";
+  $("spState").textContent = ok ? "Ingelogd: titel, hoes en afspeelpositie gekoppeld. Voor echte geluidsreacties kies je hieronder een geluidsingang." : "Niet ingelogd. Je Spotify-account moet door Mo toegevoegd zijn.";
   $("spLogout").hidden = !ok;
   $("spLogin").textContent = ok ? "Opnieuw inloggen" : "Inloggen met Spotify";
 }
@@ -280,7 +280,8 @@ function showDiag(inp) {
     `${fps} fps · ${e ? e.frameMs.toFixed(1) : "–"} ms/frame`,
     `render ${e?.RW ?? "–"}×${e?.RH ?? "–"} van ${c.width}×${c.height} · schaal ${e ? e.scale.toFixed(2) : "–"}`,
     `visual ${e?.currentVisual?.id ?? "–"} · invoer ${inp ? inp.kind : "gesimuleerd"}${inp?.io.inputName ? " (" + inp.io.inputName + ")" : ""}`,
-    `invoerlatentie ${inp && Number.isFinite(inp.io.latency) ? Math.round(inp.io.latency * 1000) + " ms" : "–"}`,
+    `invoerlatentie (apparaat) ${inp && Number.isFinite(inp.io.latency) ? Math.round(inp.io.latency * 1000) + " ms" : "onbekend"}`,
+    "Totale vertraging tot het beeld is niet gemeten.",
   ].join("\n");
 }
 
@@ -331,6 +332,7 @@ function showListen() {
 async function setListen(on) {
   const my = ++listenReq; // only the latest choice may update the screen
   if (on) {
+    setSys(false, true); setTab(false);
     const pend = listener.start();
     status("Luisteren… zet de muziek luid genoeg.");
     showListen();
@@ -348,7 +350,7 @@ $("listenChk").addEventListener("change", (e) => setListen(e.target.checked));
 if (listener.supported && store.get("listen", false)) {
   document.addEventListener("pointerdown", function resume(e) {
     document.removeEventListener("pointerdown", resume, true);
-    if (!listener.active && !listener.starting && e.target?.id !== "listenBtn" && e.target?.id !== "listenChk") setListen(true);
+    if (listenReq === 0 && !store.get("sys", false) && !listener.active && !listener.starting && e.target?.id !== "listenBtn" && e.target?.id !== "listenChk") setListen(true);
   }, true);
 }
 $("autoChk").addEventListener("change", (e) => setAuto(e.target.checked));
@@ -400,9 +402,10 @@ async function fillDevices() {
   for (const d of list) { const o = document.createElement("option"); o.value = d.deviceId; o.textContent = d.label || "Ingang zonder naam (eerst toestaan)"; sel.append(o); }
   sel.value = list.some((d) => d.deviceId === saved) ? saved : "";
 }
-async function setSys(on) {
+async function setSys(on, quiet = false) {
   const my = ++sysReq;
   if (on) {
+    setTab(false); setListen(false);
     const pend = sysIn.start();
     status("Computergeluid starten…");
     showSys();
@@ -415,8 +418,8 @@ async function setSys(on) {
       if (listener.active || listener.starting) setListen(false);
       status(`Computergeluid aan${sysIn.inputName ? " (" + sysIn.inputName + ")" : ""}: de visuals volgen wat je computer afspeelt.`);
       fillDevices();
-    } else { $("sysGuide").open = true; }
-  } else { sysIn.stop(); store.set("sys", false); status("Computergeluid uit."); }
+    } else { $("settings").hidden = false; $("sysGuide").open = true; fillDevices(); }
+  } else { sysIn.stop(); store.set("sys", false); if (!quiet) status("Computergeluid uit."); }
   sysChanged();
 }
 $("sysBtn").hidden = !sysIn.supported;
@@ -425,15 +428,16 @@ $("sysBtn").addEventListener("click", (e) => { e.stopPropagation(); setSys(!(sys
 $("sysChk").addEventListener("change", (e) => setSys(e.target.checked));
 $("sysDevice").addEventListener("change", (e) => {
   store.set("sysDevice", e.target.value);
-  if (sysIn.active) { sysIn.stop(); setSys(true); }
+  if (sysIn.active || sysIn.starting) { setSys(false, true); setSys(true); }
 });
 // Saved "on": start right away when the browser already allows the input, else on the first tap.
 if (sysIn.supported && store.get("sys", false)) {
   permissionGranted().then((granted) => {
+    if (sysReq !== 0 || !store.get("sys", false)) return;
     if (granted) setSys(true);
     else document.addEventListener("pointerdown", function resume(e) {
       document.removeEventListener("pointerdown", resume, true);
-      if (!sysIn.active && !sysIn.starting && e.target?.id !== "sysBtn" && e.target?.id !== "sysChk") setSys(true);
+      if (sysReq === 0 && store.get("sys", false) && !sysIn.active && !sysIn.starting && e.target?.id !== "sysBtn" && e.target?.id !== "sysChk") setSys(true);
     }, true);
   });
 }
@@ -449,6 +453,7 @@ let tabReq = 0;
 async function setTab(on) {
   const request = ++tabReq;
   if (on) {
+    setSys(false, true); setListen(false);
     const pend = tabIn.start();            // first: the share prompt needs the tap that started it
     status("Kies het Spotify-tabblad en zet 'Tabblad-audio delen' aan.");
     tabChanged();
@@ -556,4 +561,4 @@ $("version").textContent = "DiggyViz " + CONFIG.VERSION;
 })();
 
 // test/debug hook
-window.diggy = { player, tabIn, sysIn, get soundInput() { return soundInput()?.kind ?? null; }, setVisual, stepVisual, get engine() { return engine; }, onTrack, useSource, audio, setListen, get listening() { return listener.active; }, get tempo() { return { ...tempo, auto: tempoAuto }; } };
+window.diggy = { player, tabIn, sysIn, get soundInput() { return soundInput()?.kind ?? null; }, setVisual, stepVisual, get engine() { return engine; }, onTrack, useSource, audio, setListen, setSys, setTab, get listening() { return listener.active; }, get tempo() { return { ...tempo, auto: tempoAuto }; } };

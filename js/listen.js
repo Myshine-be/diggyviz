@@ -174,7 +174,7 @@ export function createListener({ onStatus = () => {}, onChange = () => {}, media
   isSupported = () => !!media()?.getUserMedia, messages = MIC_MESSAGES } = {}) {
   let res = null;        // { stream, ctx, an, buf, st } of the running session
   let pending = null;    // shared promise of the start in progress
-  let gen = 0;
+  let gen = 0, request = null;
   const release = (r) => {
     if (!r) return;
     try { r.stream?.getTracks().forEach((t) => t.stop()); } catch {}
@@ -191,20 +191,21 @@ export function createListener({ onStatus = () => {}, onChange = () => {}, media
     get receiving() { return !!res && res.ctx.state === "running" && !res.stream.getAudioTracks()[0]?.muted; },
     get starting() { return !!pending; },
     get bpm() { return res?.st.bpm ?? 120; },
-    /** input latency of the running AudioContext in seconds (diagnostics) */
-    get latency() { return res?.ctx ? (res.ctx.baseLatency ?? 0) : null; },
+    /** Device-reported capture latency; not end-to-end audio-to-screen delay. */
+    get latency() { const v = res?.stream.getAudioTracks()[0]?.getSettings?.().latency; return Number.isFinite(v) && v >= 0 ? v : null; },
+    get contextLatency() { return res?.ctx?.baseLatency ?? null; },
     start() {
       if (L.active) return Promise.resolve(true);
       if (pending) return pending;
       const my = ++gen;
+      const controller = new AbortController(); request = controller;
       let r = null;
       const attempt = (async () => {
         try {
-          r = { stream: await acquire() };
+          r = { stream: await acquire({ signal: controller.signal }) };
           if (my !== gen) { release(r); return false; }
           const Ctx = AudioCtx();
-          r.ctx = new Ctx();
-          if (r.ctx.state === "suspended") await r.ctx.resume();
+          r.ctx = new Ctx({ latencyHint: "interactive" });
           if (my !== gen) { release(r); return false; }
           const srcNode = r.ctx.createMediaStreamSource(r.stream);
           r.an = r.ctx.createAnalyser();
@@ -223,6 +224,9 @@ export function createListener({ onStatus = () => {}, onChange = () => {}, media
             else if (r.ctx.state !== "running") resume(); // iOS "interrupted" (call, Siri) or suspended
           });
           res = r;
+          // Autoplay may keep resume() pending until a tap. Publish the resources first,
+          // so pointerdown and stop() can reach them while the context waits.
+          resume();
           onChange(true);
           return true;
         } catch (e) {
@@ -237,7 +241,7 @@ export function createListener({ onStatus = () => {}, onChange = () => {}, media
     },
     stop() {
       const was = !!res; // also true when the context already closed on its own
-      gen++; pending = null;
+      gen++; pending = null; request?.abort(); request = null;
       const r = res; res = null;
       release(r);
       if (was) onChange(false);

@@ -49,7 +49,9 @@ void main() {
     float fog = exp(-d * 0.055) * smoothstep(0.0, 1.2, d);
     vec3 lc = mix(pal(0.35 + 0.55 * f), pal(0.97), clamp(spec * envC * 1.4, 0.0, 1.0));
     float vis = 1.0 - covered;
-    float below = 1.0 - smoothstep(-px, px, p.y - y);
+    // A newborn ridge must fade its occlusion too: a loud near-plane ridge
+    // can otherwise cover the entire sky while its own fog gain is still zero.
+    float below = (1.0 - smoothstep(-px, px, p.y - y)) * smoothstep(0.0, 1.2, d);
     vec3 body = uPal[0] * 0.14 + lc * (0.03 + 0.22 * exp(-max(y - p.y, 0.0) * 14.0)) * fog;   // flank glows under the crest
     col = mix(col, body, below * vis);          // solid mountain body
     col += lc * lineAt(p.y - y, slope, px * 1.4) * vis * fog * 1.15 * (1.0 + 1.3 * uHit * hitRow);       // glowing ridge line
