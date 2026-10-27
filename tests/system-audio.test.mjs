@@ -29,7 +29,8 @@ test('first start: asks once, finds the loopback by name, remembers it and opens
   assert.deepEqual(asked.at(-1).audio.deviceId, { exact: 'sm' });
   assert.equal(asked.at(-1).audio.echoCancellation, false);
   assert.equal(L.inputName, 'Stereomix (Realtek)');
-  assert.equal(L.latency, 0.01);
+  assert.equal(L.latency, null, "baseLatency is not capture latency");
+  assert.equal(L.contextLatency, 0.01);
   L.stop(); assert.equal(L.inputName, '');
 });
 
@@ -48,4 +49,32 @@ test('auto-start only when the permission is already granted', async () => {
   assert.equal(await permissionGranted({ permissions: { query: async () => ({ state: 'granted' }) } }), true);
   assert.equal(await permissionGranted({ permissions: { query: async () => ({ state: 'prompt' }) } }), false);
   assert.equal(await permissionGranted({}), false);
+});
+
+const flush = async () => { for(let i=0;i<12;i++) await Promise.resolve(); };
+test('stop during permission probe never opens another input or saves a device', async () => {
+  let resolve, calls=0, saved=''; const probe=stream('Microfoon');
+  const media=()=>({enumerateDevices:async()=>[],getUserMedia:()=>{calls++;return new Promise(r=>resolve=r);}});
+  const L=createSystemListener({media,AudioCtx:()=>Ctx,doc:()=>null,setDevice:id=>saved=id});
+  const pending=L.start();await flush();L.stop();resolve(probe);
+  assert.equal(await pending,false);assert.equal(calls,1);assert.equal(probe.t.stopped,true);assert.equal(saved,'');
+});
+test('stop during loopback capture releases late audio and does not remember it', async () => {
+  let resolve,saved='';const s=stream('Stereomix');
+  const media=()=>({enumerateDevices:async()=>[dev('Stereomix','sm')],getUserMedia:()=>new Promise(r=>resolve=r)});
+  const L=createSystemListener({media,AudioCtx:()=>Ctx,doc:()=>null,setDevice:id=>saved=id});
+  const pending=L.start();await flush();L.stop();resolve(s);
+  assert.equal(await pending,false);assert.equal(s.t.stopped,true);assert.equal(saved,'');
+});
+test('saved default alias is resolved again instead of capturing a changed default microphone', async () => {
+  const asked=[];let saved='default';
+  const media=()=>({enumerateDevices:async()=>[dev('Microphone','default'),dev('Stereomix','sm')],getUserMedia:async c=>{asked.push(c.audio.deviceId.exact);return stream('Stereomix');}});
+  const L=createSystemListener({media,AudioCtx:()=>Ctx,doc:()=>null,getDevice:()=>saved,setDevice:id=>saved=id});
+  assert.equal(await L.start(),true);assert.deepEqual(asked,['sm']);assert.equal(saved,'sm');L.stop();
+});
+test('a disappeared saved device falls back to a newly identified loopback', async () => {
+  let saved='old';const asked=[];
+  const media=()=>({enumerateDevices:async()=>[dev('Stereomix','new')],getUserMedia:async c=>{const id=c.audio.deviceId.exact;asked.push(id);if(id==='old')throw Object.assign(new Error(),{name:'NotFoundError'});return stream('Stereomix');}});
+  const L=createSystemListener({media,AudioCtx:()=>Ctx,doc:()=>null,getDevice:()=>saved,setDevice:id=>saved=id});
+  assert.equal(await L.start(),true);assert.deepEqual(asked,['old','new']);assert.equal(saved,'new');L.stop();
 });

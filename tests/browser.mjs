@@ -245,6 +245,32 @@ try {
   assert.ok(helperAudio.ok&&helperAudio.helper&&helperAudio.level>0&&helperAudio.range>.1&&helperAudio.closed&&helperAudio.ended,JSON.stringify(helperAudio));
   results.push({test:'same-origin helper stream into main-window Web Audio',...helperAudio});
 
+  // Exercise the actual controls and real Web Audio while faking only OS device acquisition.
+  const switching=await evaluate(`(async()=>{
+    const media=navigator.mediaDevices,oldGet=media.getUserMedia,oldList=media.enumerateDevices;
+    const c=new AudioContext();await c.resume();const o=c.createOscillator(),g=c.createGain(),dest=c.createMediaStreamDestination();
+    o.frequency.value=140;g.gain.value=.08;o.connect(g);g.connect(dest);o.start();
+    const streams=[];let resolveLate;
+    media.enumerateDevices=async()=>[{kind:'audioinput',deviceId:'qa-loopback',label:'Stereomix QA'}];
+    media.getUserMedia=async()=>{const s=dest.stream.clone();streams.push(s);return s;};
+    try{
+      await diggy.setSys(true);const system=diggy.soundInput==='system';
+      await diggy.setListen(true);const mic=diggy.soundInput==='mic'&&!diggy.sysIn.active;
+      await diggy.setSys(true);const back=diggy.soundInput==='system'&&!diggy.listening;
+      await diggy.setSys(false);
+      media.getUserMedia=()=>new Promise(r=>resolveLate=r);
+      const pending=diggy.setSys(true);
+      media.getUserMedia=async()=>{const s=dest.stream.clone();streams.push(s);return s;};
+      await diggy.setListen(true);
+      const late=dest.stream.clone();streams.push(late);resolveLate(late);await pending;
+      const latest=diggy.soundInput==='mic'&&!diggy.sysIn.active&&late.getTracks().every(t=>t.readyState==='ended');
+      await diggy.setListen(false);await diggy.setSys(false);
+      return {system,mic,back,latest,clean:streams.every(s=>s.getTracks().every(t=>t.readyState==='ended'))};
+    }finally{media.getUserMedia=oldGet;media.enumerateDevices=oldList;o.stop();dest.stream.getTracks().forEach(t=>t.stop());await c.close();}
+  })()`);
+  assert.ok(Object.values(switching).every(Boolean),JSON.stringify(switching));
+  results.push({test:'computer/microphone switching and late capture cancellation',...switching});
+
   // Every visual at rest, kick and clap, with measured-data uniforms and changing hit counters.
   await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
   const hits=[];

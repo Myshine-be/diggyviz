@@ -121,3 +121,19 @@ test('failed resume cannot reuse a frozen microphone frame as live sound', async
   const wave=new Float32Array(128).fill(1);f.L.wave(wave,1/60);assert.ok(wave.every(v=>v===0));
   f.L.stop();assert.deepEqual(f.leaks(),{liveTracks:0,openContexts:0});
 });
+
+test('autoplay-blocked startup remains reachable by a tap and can be stopped', async () => {
+  const document=new EventTarget();let ctx,stopped=false,unlocked=false;
+  class Ctx extends EventTarget {
+    constructor(){super();ctx=this;this.state='suspended';this.sampleRate=48000;this.baseLatency=.01;}
+    resume(){if(unlocked){this.state='running';return Promise.resolve();}return new Promise(()=>{});}
+    close(){this.state='closed';return Promise.resolve();}
+    createMediaStreamSource(){return {connect(){}};}
+    createAnalyser(){return {frequencyBinCount:1024};}
+  }
+  const t=new EventTarget();t.stop=()=>stopped=true;t.getSettings=()=>({latency:.025});
+  const L=createListener({media:()=>({getUserMedia:async()=>({getTracks:()=>[t],getAudioTracks:()=>[t]})}),AudioCtx:()=>Ctx,doc:()=>document});
+  assert.equal(await L.start(),true);assert.equal(L.receiving,false);assert.equal(L.starting,false);assert.equal(L.latency,.025);
+  unlocked=true;document.dispatchEvent(new Event('pointerdown'));assert.equal(L.receiving,true);
+  L.stop();assert.equal(ctx.state,'closed');assert.equal(stopped,true);
+});
