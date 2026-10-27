@@ -1,8 +1,8 @@
 // Organic level envelope shared by simulated (rhythm.js) and measured (listen.js) bands, like hardware
-// visualizers: a fast but not instant attack (~25 ms), an exponential release (~0.18 s), and peak caps that
+// visualizers: a fast but not instant attack (~9 ms), an exponential release (~0.18 s), and peak caps that
 // hang for a moment and then fall with gravity. All terms are exact in time, so 30/60/120 Hz look identical.
 
-export const ATTACK = 40;     // 1/s  — rise rate (63 % in 25 ms)
+export const ATTACK = 110;    // 1/s  — rise rate (63 % in 9 ms, 90 % in 21 ms): hits land on time
 export const RELEASE = 5.5;   // 1/s  — fall rate (63 % in 0.18 s)
 export const HOLD = 0.22;     // s    — peak caps hang this long
 export const GRAVITY = 2.4;   // 1/s² — then fall like a dropped object

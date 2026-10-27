@@ -206,7 +206,7 @@ export function createListener({ onStatus = () => {}, onChange = () => {}, media
           if (my !== gen) { release(r); return false; }
           const srcNode = r.ctx.createMediaStreamSource(r.stream);
           r.an = r.ctx.createAnalyser();
-          r.an.fftSize = 2048; r.an.smoothingTimeConstant = 0.45; r.an.minDecibels = -90; r.an.maxDecibels = -15;
+          r.an.fftSize = 2048; r.an.smoothingTimeConstant = 0.3; r.an.minDecibels = -90; r.an.maxDecibels = -15;
           srcNode.connect(r.an); // not connected to the speakers: no echo
           r.buf = new Uint8Array(r.an.frequencyBinCount);
           r.tbuf = new Float32Array(r.an.fftSize); r.gain = { peak: 0.02 };

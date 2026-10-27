@@ -39,6 +39,9 @@ export function feedHistory(bands, dt, data = audioData) {
   let n = 0;
   while (data.acc >= 1 / HIST_RATE && n < 4) { data.acc -= 1 / HIST_RATE; pushHistory(bands, data); n++; }
   if (n === 4) data.acc = 0;
+  // the newest row stays live until the next push, so "now" in the history is never up to 33 ms old
+  const o = (data.head + 1) * WAVE_N, b = data.bytes;
+  for (let i = 0; i < NB; i++) b[o + i] = Math.max(0, Math.min(255, Math.round(bands[i] * 255)));
 }
 
 const synth = new Float32Array(WAVE_N);

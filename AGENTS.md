@@ -26,7 +26,7 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
 | `js/audio-data.js` | Sound for the shaders: waveform + 2 s spectrum history in one 128×65 texture (`uAudio`). Real from the mic, simulated otherwise |
 | `js/visuals/spectrum-history.js` | Shared GLSL for line visuals: `histShape()`, `beatNow()`, `lineCol()`, `lineAt()`, `ellipseLine()` |
 | `js/palette.js` | Album-art → 4-colour **neon** palette (saturation ≥ 0.85, split-complementary accent) |
-| `js/envelope.js` | Organic level envelope for all bands: ~25 ms attack, exponential ~0.18 s release, peak caps hold 0.22 s then fall with gravity. Frame-rate exact |
+| `js/envelope.js` | Organic level envelope for all bands: ~9 ms attack (90 % in ~21 ms, keep it that fast: slower attacks read as delay), exponential ~0.18 s release, peak caps hold 0.22 s then fall with gravity. Frame-rate exact |
 | `js/visuals/*.js` | One file per visual. Registry in `js/visuals/index.js` |
 | `js/sources/*.js` | `spotify.js`, `lastfm.js`, `demo.js` — same interface |
 | `js/config.js` | Spotify Client ID, Last.fm API key, timings |
@@ -88,6 +88,8 @@ audio on a phone (iOS sandbox, DRM); only these inputs give true beat sync.
 ## Testing before you commit
 1. `node --check` on every changed `.js` file.
 2. Open the page, switch to every visual (← → keys or swipe), check the browser console is clean.
+   Key D shows frame rate, render size, visual and sound input: use it when someone reports a delay
+   (below ~40 fps the frame itself adds noticeable lag).
 3. `window.diggy.setVisual("id")` switches visuals from the console; `window.diggy.onTrack({...})`
    fakes a track change.
 4. Work on a branch, open a pull request; Mo merges to `main` (that is what GitHub Pages serves).
@@ -116,3 +118,9 @@ Use `ellipseLine()` for circles/ellipses; `lineAt()` caps the slope so steep cur
 - Strong responses belong to individual spikes, ridges, rings or particles. There is deliberately no global `punch` property: the unfinished 2.5 global zoom/exposure/bloom-flash proposal conflicts with the existing no-screen-flash rule and was removed.
 - Tab audio first opens a same-origin helper synchronously from a user tap. It requests the share, optionally after a second click inside the helper. The main window analyses its audio-only stream. A blocked popup falls back to the main-window picker.
 - Keep the helper open or minimized during playback. Closing it stops audio. Pending pickers, aborted starts, duplicate clicks, late streams and all polls/listeners must be cleaned up. Never suppress browser permission dialogs or promise that all browser-owned sharing indicators disappear; their placement depends on Chrome/Edge.
+
+## Latency budget (2.5.1)
+Visuals must land on the hit. Measured with an AnalyserNode emulation (kick onset → reaction): kick and onset
+detection ~9 ms; band levels 90 % about 20 ms faster than in 2.5.0. Keep: analyser smoothing 0.3, envelope
+ATTACK 110, the newest spectrum-history row live between 30 Hz pushes (`feedHistory`). Covered by
+`tests/latency.test.mjs`.

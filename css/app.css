@@ -138,3 +138,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .controls.player .ctl { min-width: 46px; font-size: 15px; letter-spacing: 0; }
 .controls.player #pickBtn { font-size: 12px; letter-spacing: 0.14em; }
 .progress.seekable { cursor: pointer; height: 4px; }
+
+/* diagnostics overlay (key D) */
+.diag { position: absolute; right: 12px; top: calc(70px + env(safe-area-inset-top, 0px)); white-space: pre; pointer-events: none;
+  font: 12px/1.5 var(--f-mono); color: var(--ink); background: var(--glass-strong); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; z-index: 5; }

@@ -21,7 +21,7 @@ export function createFilePlayer({ onStatus = () => {}, onChange = () => {} } = 
     ctx = new Ctx({ latencyHint: "playback" });
     const src = ctx.createMediaElementSource(el);
     an = ctx.createAnalyser();
-    an.fftSize = 2048; an.smoothingTimeConstant = 0.45; an.minDecibels = -90; an.maxDecibels = -15;
+    an.fftSize = 2048; an.smoothingTimeConstant = 0.3; an.minDecibels = -90; an.maxDecibels = -15;
     delay = ctx.createDelay(1.0);
     src.connect(ctx.destination);       // what you hear
     src.connect(delay); delay.connect(an); // what the visuals see, delayed to match the output

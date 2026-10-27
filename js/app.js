@@ -262,7 +262,20 @@ function frame(now) {
     } catch (e) { console.error(e); }
   }
   $("bar").style.width = (track.dur ? (pos / track.dur) * 100 : 0) + "%";
+  if (!$("diag").hidden && now - lastDiag > 500) { lastDiag = now; showDiag(inp); }
   requestAnimationFrame(frame);
+}
+
+/* diagnostics (key D): frame time, render size and input, to find where a delay comes from */
+let lastDiag = 0;
+function showDiag(inp) {
+  const e = engine, c = $("viz");
+  const fps = e ? Math.round(1000 / Math.max(1, e.frameMs)) : 0;
+  $("diag").textContent = [
+    `${fps} fps · ${e ? e.frameMs.toFixed(1) : "–"} ms/frame`,
+    `render ${e?.RW ?? "–"}×${e?.RH ?? "–"} van ${c.width}×${c.height} · schaal ${e ? e.scale.toFixed(2) : "–"}`,
+    `visual ${e?.currentVisual?.id ?? "–"} · invoer ${inp ? inp.kind : "gesimuleerd"}`,
+  ].join("\n");
 }
 
 /* ---------------- controls ---------------- */
@@ -419,6 +432,7 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "t") $("tap").click();
   else if (e.key === "h") app.classList.toggle("idle");
   else if (e.key === "f" && canFs) $("fsBtn").click();
+  else if (e.key === "d") $("diag").hidden = !$("diag").hidden;
 });
 
 let wakeLock = null;
