@@ -117,7 +117,7 @@ try {
   const ridge=await evaluate(`(async()=>{
     const {audioData,pushHistory}=await import('./js/audio-data.js');const e=diggy.engine;
     const vis=e.visuals.find(v=>v.id==='landscape');
-    e.visuals.push({...vis,id:'qa-landscape-before',frag:vis.frag.replace(' * smoothstep(0.0, 1.2, d);',';')});
+    e.visuals.push({...vis,id:'qa-landscape-before',frag:vis.frag.replace('(1.0 - smoothstep(-px, px, p.y - y)) * smoothstep(0.0, 1.2, d)', '(1.0 - smoothstep(-px, px, p.y - y))')});
     const a={bands:new Float32Array(32).fill(1),peaks:new Float32Array(32).fill(1),flux:new Float32Array(32).fill(1),kick:1,snare:1,hat:1,energy:1,level:1,hit:1,beat:0};
     for(let i=0;i<65;i++)pushHistory(a.bands);
     const checks=[];
