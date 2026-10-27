@@ -101,7 +101,7 @@ try {
       window.__step(1/60);
       const gl=e.gl, pixels=new Uint8Array(e.W*e.H*4);gl.readPixels(0,0,e.W,e.H,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
       let lit=0;for(let i=0;i<pixels.length;i+=4)if(pixels[i]+pixels[i+1]+pixels[i+2]>30)lit++;
-      return {id:e.currentVisual.id,compiled:!!e.programs.get(${JSON.stringify(id)}),glError:gl.getError(),litPixels:lit};
+      return {id:e.currentVisual.id,compiled:!!e.programs.get(${JSON.stringify(id)}),glError:gl.getError(),litPixels:lit,queuedFrames:window.__frames.length,lost:gl.isContextLost(),size:[e.W,e.H],drawSize:[gl.drawingBufferWidth,gl.drawingBufferHeight],defaultFramebuffer:gl.getParameter(gl.FRAMEBUFFER_BINDING)===null};
     })()`);
     assert.ok(result.compiled && result.glError === 0 && result.litPixels > 100, JSON.stringify(result));
     results.push(result); await new Promise(r => setTimeout(r, 300)); await screenshot(id);

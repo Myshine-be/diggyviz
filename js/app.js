@@ -109,7 +109,7 @@ function showTempo() {
     system: "Computergeluid: het echte geluid van je computer. Tempo gemeten.",
     paused: "Muziek gepauzeerd.",
     mic: "Microfoon: gemeten geluid; het tempo is een schatting.",
-    interrupted: "Het geluid wacht op een tik: tik of klik één keer op het scherm (regel van de browser).",
+    interrupted: "Geluidsingang onderbroken of geblokkeerd. Tik op het scherm; controleer de ingang als dit blijft staan.",
     found: "Tempo via Deezer. Tik mee om de timing bij te stellen; geen geluidsanalyse.",
     tapped: "Tempo en timing ingesteld met jouw tikken.", demo: "Demoritme; geen analyse van de muziek.",
     loading: "Tempo wordt opgezocht. Tot dan wordt 120 BPM gebruikt.",
@@ -418,7 +418,7 @@ async function setSys(on, quiet = false) {
       if (listener.active || listener.starting) setListen(false);
       status(`Computergeluid aan${sysIn.inputName ? " (" + sysIn.inputName + ")" : ""}: de visuals volgen wat je computer afspeelt.`);
       fillDevices();
-    } else { $("sysGuide").open = true; }
+    } else { $("settings").hidden = false; $("sysGuide").open = true; fillDevices(); }
   } else { sysIn.stop(); store.set("sys", false); if (!quiet) status("Computergeluid uit."); }
   sysChanged();
 }
