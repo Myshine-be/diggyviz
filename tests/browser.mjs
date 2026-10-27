@@ -101,7 +101,15 @@ try {
       window.__step(1/60);
       const gl=e.gl, pixels=new Uint8Array(e.W*e.H*4);gl.readPixels(0,0,e.W,e.H,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
       let lit=0;for(let i=0;i<pixels.length;i+=4)if(pixels[i]+pixels[i+1]+pixels[i+2]>30)lit++;
-      return {id:e.currentVisual.id,compiled:!!e.programs.get(${JSON.stringify(id)}),glError:gl.getError(),litPixels:lit,queuedFrames:window.__frames.length,lost:gl.isContextLost(),size:[e.W,e.H],drawSize:[gl.drawingBufferWidth,gl.drawingBufferHeight],defaultFramebuffer:gl.getParameter(gl.FRAMEBUFFER_BINDING)===null};
+      let debug=null;
+      if(lit===0){
+        const pr=e.programs.get(e.currentVisual.id),uniforms={};
+        for(const [name,loc] of Object.entries(pr.loc)){const v=gl.getUniform(pr.prog,loc);uniforms[name]=ArrayBuffer.isView(v)?Array.from(v):v;}
+        const sample=new Float32Array(4);gl.bindFramebuffer(gl.FRAMEBUFFER,e.cur.t[e.cur.i].fb);gl.readPixels(Math.floor(e.RW/2),Math.floor(e.RH/2),1,1,gl.RGBA,gl.FLOAT,sample);gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+        window.__step(1/60);const again=new Uint8Array(e.W*e.H*4);gl.readPixels(0,0,e.W,e.H,gl.RGBA,gl.UNSIGNED_BYTE,again);let next=0;for(let i=0;i<again.length;i+=4)if(again[i]+again[i+1]+again[i+2]>30)next++;
+        debug={uniforms,sample:Array.from(sample),next};
+      }
+      return {debug,id:e.currentVisual.id,compiled:!!e.programs.get(${JSON.stringify(id)}),glError:gl.getError(),litPixels:lit,queuedFrames:window.__frames.length,lost:gl.isContextLost(),size:[e.W,e.H],drawSize:[gl.drawingBufferWidth,gl.drawingBufferHeight],defaultFramebuffer:gl.getParameter(gl.FRAMEBUFFER_BINDING)===null};
     })()`);
     assert.ok(result.compiled && result.glError === 0 && result.litPixels > 100, JSON.stringify(result));
     results.push(result); await new Promise(r => setTimeout(r, 300)); await screenshot(id);
