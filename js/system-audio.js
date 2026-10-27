@@ -64,6 +64,7 @@ export function createSystemListener({ onStatus, onChange, media = () => navigat
         try {
           return await capture(id);
         } catch (e) {
+          check();
           if (e?.name !== "OverconstrainedError" && e?.name !== "NotFoundError") throw e;
           id = ""; setDevice("");
         }

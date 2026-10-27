@@ -78,3 +78,11 @@ test('a disappeared saved device falls back to a newly identified loopback', asy
   const L=createSystemListener({media,AudioCtx:()=>Ctx,doc:()=>null,getDevice:()=>saved,setDevice:id=>saved=id});
   assert.equal(await L.start(),true);assert.deepEqual(asked,['old','new']);assert.equal(saved,'new');L.stop();
 });
+
+test('late device failure cannot clear a newer saved selection after cancellation', async () => {
+  let reject,saved='old';
+  const media=()=>({enumerateDevices:async()=>[],getUserMedia:()=>new Promise((_,r)=>reject=r)});
+  const L=createSystemListener({media,AudioCtx:()=>Ctx,doc:()=>null,getDevice:()=>saved,setDevice:id=>saved=id});
+  const pending=L.start();L.stop();saved='new';reject(Object.assign(new Error(),{name:'NotFoundError'}));
+  assert.equal(await pending,false);assert.equal(saved,'new');
+});
