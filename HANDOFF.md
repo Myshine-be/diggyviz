@@ -1,3 +1,27 @@
+# Stand 28 oktober 2026, nacht — DiggyViz 2.8.0 (Claude)
+Mo's wensen in deze ronde: kleuren per nummer uit de hoes, rustiger automatisch wisselen, geen flitsen in Urchin, Soul Beat levendiger, Strings zoals Vanish, Bubbles herwerken, Night Drive → ruimte, en Bloop als alien op een eigen planeet.
+
+## Gedaan
+Alles staat in AGENTS.md onder "2.8".
+- **Kleuren:** `paletteFromPixels` + tests. In de kleurtest met drie hoezen (zonsondergang, oceaan, bos) zag elke visual er duidelijk anders uit.
+- **Wisselen:** 180 s, crossfade 3 s, een nieuw nummer pas na 120 s.
+- **Urchin:** zonder licht op treffers.
+- **Strings, Soul Beat en Bubbles:** herschreven.
+- **Ruimtereis en Bloop:** nieuw. De gedeelde alien `glorp()` en `astronaut()` staan in `story-shapes.js`.
+
+## Getest
+- 78 Node-tests.
+- `tests/browser.mjs`: alle 13 shaders.
+- Verhaal-lifecycle en temporele luminantie: Strings 0,007 en Urchin 0,02 (eerder ~0,15–0,19), Ruimtereis 0,004, Bloop 0,003.
+- Stills in landschap en portret.
+
+## Let op
+- **Spotify-login in de Windows-app:** die is apart van Chrome. Ben je niet ingelogd, dan draait de demo met vaste groene kleuren. Dat verklaart Mo's "altijd dezelfde kleuren".
+- **Vanish:** heeft de hoogste temporele luminantie (0,148). Daar is nog niets aan gedaan.
+- **Fysiek niet getest:** iPhone-prestaties met de nieuwe Ruimtereis.
+
+---
+
 # Stand 28 oktober 2026, avond (Claude)
 - **Windows-app getest door Mo:** de live beatsync werkt via WASAPI-loopback ("invoer desktop", 119 fps, invoerlatentie 10 ms).
 - **2.7.1:** de visual-keuze (chips) onderaan is terug. Die mag niet meer verborgen worden.

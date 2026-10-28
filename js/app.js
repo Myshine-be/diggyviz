@@ -171,7 +171,8 @@ async function onTrack(t) {
   const isFirst = firstTrack;
   drop = isFirst ? 0 : 1;
   taps = [];
-  if (auto && !isFirst && switchOnTrack(engine?.currentVisual)) stepVisual(1);
+  // a new song may bring a new visual, but only after the current one had at least 2 minutes
+  if (auto && !isFirst && switchOnTrack(engine?.currentVisual) && (performance.now() - lastSwitch) / 1000 >= 120) stepVisual(1);
   firstTrack = false;
 
   if (t.palette) { palTarget = clonePal(t.palette); engine?.setArt(null, t.palette); }

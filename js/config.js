@@ -9,8 +9,8 @@ export const CONFIG = {
   LASTFM_API_KEY: "",
 
   // Visual carousel
-  AUTO_SWITCH_SECONDS: 45,
-  CROSSFADE_SECONDS: 1.6,
+  AUTO_SWITCH_SECONDS: 180,   // calm: a visual gets time to grow on you
+  CROSSFADE_SECONDS: 3,
 
-  VERSION: "2.7.2",
+  VERSION: "2.8.0",
 };

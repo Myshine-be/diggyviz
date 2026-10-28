@@ -1,5 +1,7 @@
-// Bloop — an original DiggyViz character: a jelly creature that hops to the next neon platform
-// on every beat, collects spinning records and is chased by three pixel critters ("Glitchies").
+// Bloop — a Glorp (DiggyViz's own alien species, see story-shapes.js) on his home planet. He hops over rocks,
+// mushroom houses and crystals on every beat (a big leap every eighth beat), collects spinning records and is
+// chased by three pixel critters ("Glitchies"). Behind him: an alien sky with two moons and the ringed planet
+// from Ruimtereis, crystal mountains and glowing alien plants; the ground breathes softly with the bass.
 // After 90 visible seconds a flying saucer arrives, beams down an alien and the alien chases Bloop,
 // hopping on every beat and slowly closing in. The alien stays until the viewer changes visual.
 import { STORY_SHAPES } from "./story-shapes.js";
@@ -16,7 +18,8 @@ float platH(float i) { return -0.17 + (hash12(vec2(i, 7.3)) - 0.5) * 0.16; }
 vec2 hopPath(float b) {
   float i = floor(b), f = fract(b);
   float y = mix(platH(i), platH(i + 1.0), smoothstep(0.0, 1.0, f));
-  y += sin(PI * f) * (0.11 + 0.03 * uEnergy);
+  float big = step(7.0, mod(i, 8.0));                 // every eighth beat: a big leap
+  y += sin(PI * f) * (0.11 + 0.03 * uEnergy + 0.09 * big);
   return vec2(b * SP, y + 0.012);
 }
 
@@ -129,22 +132,57 @@ void main() {
   float scroll = b * SP;
   float wx = p.x - BX + scroll;                        // world x of this pixel
 
-  // sky + stars
-  vec3 col = mix(uPal[0] * 0.25, uPal[0] * 0.08 + uPal[1] * 0.05, smoothstep(-0.4, 0.5, p.y));
-  vec2 st = p * 60.0 + vec2(scroll * 6.0, 0.0);
-  col += uPal[2] * exp(-dot(fract(st) - 0.5, fract(st) - 0.5) * 140.0) * step(0.97, hash12(floor(st))) * 0.35;
-
-  // parallax equalizer hills (two layers)
-  for (int l = 0; l < 2; l++) {
-    float fl = float(l);
-    float sx = p.x + scroll * (0.25 + 0.25 * fl);
-    float cw = 0.035 + 0.02 * fl;
-    float ci = floor(sx / cw);
-    float h = -0.12 - 0.06 * fl + band(fract(ci * 0.137 + fl * 0.5)) * (0.12 - 0.04 * fl) + hash12(vec2(ci, fl)) * 0.035;
-    float bar = step(p.y, h) * step(0.1, fract(sx / cw)) * step(fract(sx / cw), 0.9);
-    col = mix(col, mix(uPal[0] * 0.55, uPal[0] * 0.3 + uPal[1] * 0.06, fl), bar);
-    col += uPal[1] * exp(-abs(p.y - h) * 300.0) * step(0.1, fract(sx / cw)) * step(fract(sx / cw), 0.9) * 0.06;   // glowing bar tops
+  // alien sky: cover colours, stars, two moons and the ringed planet from Ruimtereis
+  vec3 col = mix(uPal[0] * 0.3 + uPal[1] * 0.06, uPal[0] * 0.07, smoothstep(-0.3, 0.55, p.y));
+  vec2 st = p * 60.0 + vec2(scroll * 1.5, 0.0);
+  col += mix(vec3(1.0), uPal[2], 0.4) * exp(-dot(fract(st) - 0.5, fract(st) - 0.5) * 140.0) * step(0.975, hash12(floor(st))) * 0.4 * smoothstep(-0.1, 0.3, p.y);
+  {
+    vec2 m1 = p - vec2(0.33 - scroll * 0.01, 0.31);
+    col = mix(col, mix(uPal[2], vec3(1.0), 0.5) * (0.6 + 0.4 * smoothstep(0.05, -0.05, m1.x + m1.y)), disk(m1, 0.045, aa));
+    col += mix(uPal[2], vec3(1.0), 0.5) * exp(-length(m1) * 18.0) * 0.12;
+    vec2 m2 = p - vec2(-0.05 - scroll * 0.006, 0.38);
+    col = mix(col, mix(uPal[3], vec3(1.0), 0.3) * 0.9, disk(m2, 0.018, aa));
+    // ringed planet: its ringlets glow with bass → highs, like in Ruimtereis
+    vec2 rp = p - vec2(-0.32 - scroll * 0.004, 0.26);
+    vec2 rr = rot(-0.3) * rp;
+    float e = length(rr / vec2(1.0, 0.27));
+    vec3 ringC = vec3(0.0); float ra = 0.0;
+    for (int i = 0; i < 4; i++) { float fi = float(i); float lv = histSmooth(0.05 + fi * 0.25, 0.0);
+      float bnd = 1.0 - smoothstep(0.002, 0.0045, abs(e - 0.075 - fi * 0.011));
+      ringC += pal(0.3 + fi * 0.2) * bnd * (0.4 + lv); ra = max(ra, bnd * 0.8); }
+    col = mix(col, ringC, ra * step(0.0, rr.y));
+    float pd = disk(rp, 0.045, aa);
+    col = mix(col, mix(uPal[1], uPal[3], 0.3) * (0.35 + 0.65 * smoothstep(0.04, -0.03, rp.x - rp.y)) + 0.02 * sin(rp.y * 120.0), pd);
+    col = mix(col, ringC, ra * step(rr.y, 0.0));
   }
+  // crystal mountains far away, then hills with glowing alien plants (parallax)
+  {
+    float sx = p.x + scroll * 0.12;
+    float h = -0.02 + 0.09 * abs(fract(sx * 2.2) - 0.5) * 2.0 * (0.6 + 0.4 * hash12(vec2(floor(sx * 2.2), 1.0))) + 0.04 * fbm2(vec2(sx * 3.0, 0.0));
+    float mtn = step(p.y, h);
+    col = mix(col, mix(uPal[0] * 0.6, uPal[1] * 0.25, 0.3), mtn);
+    col += uPal[2] * exp(-abs(p.y - h) * 260.0) * 0.12 * (1.0 - mtn * 0.5);                 // icy ridge light
+  }
+  {
+    float sx = p.x + scroll * 0.35;
+    float h = -0.13 + 0.035 * sin(sx * 7.0) + 0.02 * sin(sx * 17.0 + 1.0);
+    col = mix(col, uPal[0] * 0.45 + uPal[1] * 0.05, step(p.y, h));
+    float ci = floor(sx / 0.09);
+    float px_ = sx - (ci + 0.5) * 0.09;
+    if (hash12(vec2(ci, 3.0)) > 0.45) {                   // an alien plant: curved stalk with a glowing bulb
+      float ph = 0.04 + 0.04 * hash12(vec2(ci, 5.0));
+      float sway = 0.006 * sin(uSceneBeat * PI + ci);
+      vec2 base = vec2(0.0, h + 0.035 * sin((sx - px_) * 7.0) * 0.0);
+      vec2 tip = base + vec2(sway, ph);
+      col = mix(col, uPal[1] * 0.5, strokeSeg(vec2(px_, p.y), base, tip, 0.0018, aa));
+      float glow = 0.5 + 0.5 * histSmooth(fract(ci * 0.37), 0.0);
+      col = mix(col, mix(pal(fract(ci * 0.29)), vec3(1.0), 0.2), disk(vec2(px_, p.y) - tip, 0.006, aa));
+      col += pal(fract(ci * 0.29)) * exp(-length(vec2(px_, p.y) - tip) * 70.0) * 0.25 * glow;
+    }
+  }
+  col *= 1.0 - 0.45 * smoothstep(-0.14, -0.5, p.y);          // deeper ground fades into shadow
+  // the ground breathes softly with the bass
+  col += uPal[1] * exp(-max(p.y + 0.26, 0.0) * 9.0) * 0.07 * (0.6 + 0.6 * histSmooth(0.05, 0.0)) * step(p.y, -0.1);
 
   // platforms
   float pi0 = floor(wx / SP + 0.5);
@@ -153,11 +191,33 @@ void main() {
     vec2 q = vec2(wx - i * SP, p.y - platH(i));
     float since = b - (i - 1.0);                         // beats since Bloop landed here
     float flash = since >= 1.0 ? exp(-(since - 1.0) * 3.0) : 0.0;
-    float top = boxMask(q - vec2(0.0, -0.012), vec2(0.07, 0.012), 0.008, aa);
-    col = mix(col, mix(uPal[0], uPal[1], 0.35) + 0.02, top);
-    float edge = 1.0 - smoothstep(0.0012 - aa, 0.0012 + aa, abs(boxSDF(q - vec2(0.0, -0.012), vec2(0.07, 0.012), 0.008)));
-    col += mix(uPal[1], uPal[3], flash) * edge * (0.55 + 1.2 * flash);
-    col += uPal[1] * exp(-max(-q.y, 0.0) * 30.0) * step(abs(q.x), 0.07) * step(q.y, -0.024) * 0.08;  // underglow
+    // what Bloop lands on: a boulder, a mushroom house or a crystal (chosen per spot)
+    float kind = hash12(vec2(i, 11.0));
+    if (kind < 0.4) {                                    // boulder with moss
+      float rock = disk((q - vec2(0.0, -0.05)) * vec2(0.85, 1.25), 0.07, aa);
+      col = mix(col, mix(uPal[0] * 1.6 + 0.04, vec3(0.35), 0.4) * (0.7 + 0.5 * smoothstep(-0.1, 0.0, q.y - q.x)), rock);
+    } else if (kind < 0.72) {                            // mushroom house: stalk with a door and window, round cap
+      col = mix(col, vec3(0.85, 0.8, 0.7) * 0.75, boxMask(q - vec2(0.0, -0.07), vec2(0.03, 0.06), 0.01, aa));
+      col = mix(col, uPal[0] * 0.8, boxMask(q - vec2(0.0, -0.105), vec2(0.009, 0.02), 0.008, aa));
+      col += uPal[2] * disk(q - vec2(0.016, -0.06), 0.006, aa) * 0.9;
+      float cap = disk((q - vec2(0.0, -0.012)) * vec2(0.8, 1.9), 0.07, aa) * step(-0.024, q.y);
+      col = mix(col, mix(uPal[3], uPal[1], 0.25) * (0.7 + 0.4 * smoothstep(-0.02, 0.02, q.y)), cap);
+      for (int d = 0; d < 3; d++) col = mix(col, vec3(0.95), disk(q - vec2(float(d - 1) * 0.03, -0.003 + 0.004 * float(d % 2)), 0.006, aa) * cap);
+    } else {                                             // crystal cluster
+      for (int c = 0; c < 3; c++) {
+        float fc = float(c) - 1.0;
+        vec2 cq = q - vec2(fc * 0.035, -0.11);
+        cq = rot(fc * 0.25) * cq;
+        float hgt = c == 1 ? 0.11 : 0.07;
+        float wdt = c == 1 ? 0.022 : 0.016;
+        float cry = step(abs(cq.x), wdt) * step(0.0, cq.y) * step(cq.y, hgt - abs(cq.x) * 1.6);
+        vec3 cc = mix(uPal[2], uPal[1], 0.35 + 0.2 * fc) * (0.5 + 0.7 * step(0.0, cq.x));      // two facets
+        col = mix(col, cc, cry);
+        col += vec3(1.0) * cry * (1.0 - smoothstep(0.0, 0.0025, abs(cq.x))) * 0.35;
+      }
+    }
+    // a soft glow where Bloop just landed (local, fades in a moment)
+    col += mix(uPal[1], uPal[3], 0.5) * exp(-dot(q * vec2(9.0, 40.0), q * vec2(9.0, 40.0))) * 0.35 * flash;
     // record above the platform: collected when Bloop passes
     float taken = smoothstep(i - 0.1, i + 0.05, b);
     vec2 rq = q - vec2(0.0, 0.085 + sin(t * 2.0 + i) * 0.006);
@@ -216,7 +276,7 @@ void main() {
   col *= 1.0 - 0.5 * exp(-dot((p - vec2(bp.x, shadowY)) * vec2(14.0, 60.0) / scale, (p - vec2(bp.x, shadowY)) * vec2(14.0, 60.0) / scale)) * (1.0 - smoothstep(0.0, 0.15, bp.y - shadowY));
   // while being chased Bloop glances back every fourth beat
   float look = chasing > 0.0 && fract(b / 4.0) > 0.7 ? -1.0 : 1.0;
-  col = bloopChar(col, p - bp, max(land, 0.0), scale, aa, look);
+  col = glorp(col, p - bp, 0.05, max(land, 0.0), look, aa);
 
   fragColor = vec4(max(col, vec3(0.0)), 1.0);
 }`,

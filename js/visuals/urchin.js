@@ -4,7 +4,7 @@
 export default {
   id: "urchin",
   name: "Urchin",
-  bloom: 0.55,
+  bloom: 0.35,
   frag: /* glsl */ `
 const float PHI = 1.61803398875;
 const float NSPIKES = 420.0;
@@ -117,7 +117,7 @@ void main() {
     for (i = 0; i < 110; i++) {
       vec3 pos = ro + rd * t;
       d = map(pos);
-      glow += exp(-d * 28.0) * (0.15 + 0.85 * gTip) * (0.012 + 0.006 * kickSel(gId) * uKick);
+      glow += exp(-d * 28.0) * (0.15 + 0.85 * gTip) * 0.012;
       if (d < 0.0008 * t) { hit = true; break; }
       // the distance only sees the nearest spike: near the ball, cap the step so long neighbours are not skipped
       t += min(d * 0.72, length(pos) < R + 0.95 ? 0.045 : 1e3);
@@ -136,11 +136,7 @@ void main() {
       col = base * (0.1 + 0.85 * dif) * (0.35 + 0.65 * ao);
       col += mix(uPal[1], uPal[2], 0.25) * pow(tip, 3.0) * (0.25 + 0.45 * uEnergy);
       col += uPal[1] * rim * 0.25 * tip;
-      // hits light up in colour, never white: the movement of the spikes carries the beat, not a flash
-      float tk = pow(tip, 1.6);
-      col += uPal[3] * kickSel(gId) * uKick * tk * 0.8;
-      col += pal(0.95) * snareSel(gId) * uSnare * tk * 0.7;
-      col += uPal[2] * flux(spikeFreq(gQ, gId)) * tk * 0.45;
+      // no lighting on hits at all: only the spikes move (Mo: no flashes in Urchin)
     }
   }
   col += uPal[1] * glow * (0.3 + 0.4 * uEnergy);

@@ -25,7 +25,7 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
 | `js/id3.js` | Pure ID3v2.3/2.4 reader (title/artist/album/cover) + `parseFileName()` |
 | `js/audio-data.js` | Sound for the shaders: waveform + 2 s spectrum history in one 128×65 texture (`uAudio`). Real from the mic, simulated otherwise |
 | `js/visuals/spectrum-history.js` | Shared GLSL for line visuals: `histShape()`, `beatNow()`, `lineCol()`, `lineAt()`, `ellipseLine()` |
-| `js/palette.js` | Album-art → 4-colour **neon** palette (saturation ≥ 0.85, split-complementary accent) |
+| `js/palette.js` | Album-art → 4 colours taken **from the cover itself** (`paletteFromPixels`: weighted k-means; mid = dominant vivid colour, hi = second colour, hot = accent, dark = deep shade). Saturation only lifted to ≥ 0.6. Grey covers → calm palette. Tested in `tests/palette.test.mjs` |
 | `js/envelope.js` | Organic level envelope for all bands: ~9 ms attack (90 % in ~21 ms, keep it that fast: slower attacks read as delay), exponential ~0.18 s release, peak caps hold 0.22 s then fall with gravity. Frame-rate exact |
 | `js/visuals/*.js` | One file per visual. Registry in `js/visuals/index.js` |
 | `js/sources/*.js` | `spotify.js`, `lastfm.js`, `demo.js` — same interface |
@@ -168,3 +168,23 @@ The app window has no Windows title bar (`frame: false`; Mo's accent colour made
 that call `window.diggyDesktop.minimize/toggleMaximize/close` → IPC "win" in desktop/main.js. It is a `.hud`, so it hides
 with the HUD after 4 s. `html.desktop .hud-top` moves the top HUD below it. In a normal browser nothing changes.
 App 0.1.1+ clears the HTTP cache at start and reloads with F5 / Ctrl+R (GitHub Pages caches 10 minutes).
+
+## 2.8 — colours, pacing and reworked visuals
+- **Cover colours must stay recognisable.** `pal()` hue drift is ±0.12 rad (was 0.45) and the final neon grade ±0.25 rad
+  (was 0.85). Do not raise these again: Mo wants every song to look different, in the cover's own colours.
+  In the Windows app Spotify must be logged in (⚙ → Spotify); without it the demo source with its fixed palettes runs.
+- **Calm pacing:** `AUTO_SWITCH_SECONDS` 180, crossfade 3 s. A new song switches the visual only if it was shown ≥ 120 s.
+  Story visuals keep their 120 s duration.
+- **Urchin:** no lighting on hits at all (Mo: "no flashes"). Only the spikes move. Bloom 0.35.
+- **Strings:** rebuilt on the Vanish principle (lagged `histSmooth` traces) as one symmetric bundle pinched at both
+  ends — calm and readable like the handheld-console "strings". Do not make every line independent again.
+- **Soul Beat:** six melting metaballs (ferrofluid) with droplets that split off on kick/snare, high-note spikes per
+  direction, glossy liquid shading; no halo flash.
+- **Bubbles:** slow lava lamp (2D metaballs, thin-film colours with a smooth periodic mapping, caustics, pearls on highs).
+- **Ruimtereis** (id `nightdrive`, file night-drive.js): original ship in space, planets, ringed planet whose 7 ringlets
+  are the spectrum, asteroids (one shoots by on kicks), satellites blinking on the beat, a wheel station. Easter egg
+  90–105 s: landing planet rises, ship lands, an astronaut dances with three Glorps, take-off.
+- **Bloop:** Bloop is a Glorp (shared alien, `glorp()` in story-shapes.js, also used in Ruimtereis). Alien sky with
+  two moons and the ringed planet, crystal mountains, glowing plants; he hops over boulders, mushroom houses and crystal
+  clusters, with a big leap every 8th beat. The equalizer hills are gone.
+- `story-shapes.js` now also holds `glorp()` and `astronaut()`.

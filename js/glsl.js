@@ -75,9 +75,9 @@ vec3 palBase(float t) {
 }
 vec3 pal(float t) {
   vec3 c = palBase(t);
-  c = hueRotate(c, 0.45 * sin(uTime * 0.045 + t * 2.2));
+  c = hueRotate(c, 0.12 * sin(uTime * 0.045 + t * 2.2));   // gentle: the cover colours stay recognisable
   float l = dot(c, vec3(0.299, 0.587, 0.114));
-  return max(mix(vec3(l), c, 1.3), 0.0);
+  return max(mix(vec3(l), c, 1.15), 0.0);
 }
 
 // Same shape as rhythm.js wave(): x 0..1 → about -1..1
@@ -167,7 +167,7 @@ void main() {
   vec2 uv = gl_FragCoord.xy / uRes;
   vec3 c = texture(uScene, uv).rgb + texture(uBloom, uv).rgb * uBloomAmt;
   // neon grade: hue flows softly across the screen and over time; greys and whites are untouched
-  float ga = uGrade * 0.6 * sin(uv.x * 2.6 - uv.y * 1.9 + uTime * 0.12) + uGrade * 0.25 * sin(uv.y * 3.3 + uTime * 0.07);
+  float ga = uGrade * 0.18 * sin(uv.x * 2.6 - uv.y * 1.9 + uTime * 0.12) + uGrade * 0.07 * sin(uv.y * 3.3 + uTime * 0.07);   // subtle: keep the cover colours
   const vec3 gk = vec3(0.57735);
   c = c * cos(ga) + cross(gk, c) * sin(ga) + gk * dot(gk, c) * (1.0 - cos(ga));
   float gl = dot(c, vec3(0.299, 0.587, 0.114));

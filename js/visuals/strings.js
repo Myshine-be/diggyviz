@@ -1,50 +1,52 @@
-// Strings — a bundle of thin glowing lines along the horizon, pinched at both ends,
-// drawn from the waveform of the sound itself, like an oscilloscope (real sound in listening mode).
-// The waveform shapes the lines; kicks and claps make the bundle jump and flare.
+// Strings — like the handheld-console "strings" visualizer: one calm bundle of thin glowing lines across the
+// screen, pinched at both ends. Built on the same principle as Vanish (Mo: "the most accurate one"): every
+// line replays the recent sound a little later than the one before, so the bundle moves as one organic ribbon
+// that braids and fans out, instead of every line doing its own thing. Bass = long swells, highs = fine ripples.
+// No brightness changes on the beat: only the shape moves.
+import { SPECTRUM_HISTORY } from "./spectrum-history.js";
 
 export default {
   id: "strings",
   name: "Strings",
-  bloom: 0.75,
+  bloom: 0.8,
   frag: /* glsl */ `
-const int NL = 12;
+${SPECTRUM_HISTORY}
+const int NL = 16;
 
-// album colour, lifted so the lines stay visible on dark covers
-vec3 lineColour() {
-  vec3 c = mix(uPal[1], uPal[2], 0.45);
-  float m = max(c.r, max(c.g, c.b));
-  return c / max(m, 0.05) * 0.9;
+// one trace: four frequency groups, each with its own wavelength, travelling slowly sideways
+float trace(float u, float lag, float seed) {
+  float t = uTime;
+  float a0 = histSmooth(0.05, lag), a1 = histSmooth(0.2, lag), a2 = histSmooth(0.42, lag), a3 = histSmooth(0.7, lag);
+  float y = 0.0;
+  y += a0 * sin(TAU * (u * 1.0 + t * 0.16) + seed * 0.6);
+  y += a1 * sin(TAU * (u * 2.0 - t * 0.23) + seed * 1.1) * 0.62;
+  y += a2 * sin(TAU * (u * 3.4 + t * 0.31) + seed * 1.7) * 0.36;
+  y += a3 * sin(TAU * (u * 5.6 - t * 0.43) + seed * 0.9) * 0.2;
+  y += 0.14 * sin(TAU * (u * 0.8 + t * 0.05) + seed * 0.3);      // idle breathing: never a dead line
+  return y;
 }
 
 void main() {
   vec2 p = P();
-  float u = gl_FragCoord.x / uRes.x;               // 0..1 across the full width
   float px = 1.0 / min(uRes.x, uRes.y);
-  float t = uTime;                                  // continuous, unaffected by seeks
+  float halfW = 0.5 * uRes.x / min(uRes.x, uRes.y);
+  float tall = clamp(uRes.y / uRes.x - 1.0, 0.0, 1.3);
+  float u = clamp((p.x + halfW) / (2.0 * halfW), 0.0, 1.0);        // 0..1 across the full width
+  float env = pow(sin(PI * u), 1.35);                               // pinched at both ends
+  float amp = 0.15 * (1.0 + 0.8 * tall);
 
-  float env = pow(sin(PI * clamp(u, 0.0, 1.0)), 1.2);
-  float loud = clamp(uEnergy * 1.1 + 0.2, 0.3, 1.0);   // slow section loudness; the beat is in the wave shape
-  float A = env * 0.36 * loud * (1.0 + 0.55 * uKick + 0.35 * uSnare);   // ~35 % of the height, more on a hit
+  vec3 col = uPal[0] * 0.10;
+  col += mix(uPal[1], uPal[2], u) * 0.05 * exp(-p.y * p.y * 18.0) * env;   // soft haze around the bundle
 
-  vec3 lc = lineColour();
-  vec3 col = uPal[0] * 0.16 + lc * 0.025 * exp(-p.y * p.y * 40.0);
-
-  float lines = 0.0;
   for (int i = 0; i < NL; i++) {
-    float fi = float(i);
-    float h = hash12(vec2(fi, 3.7));
-    // every line is the waveform itself (the sound), each read slightly stretched/shifted: a bundle
-    float w = i == 0 ? waveAt(u) : waveAt(fract(u * (1.0 + 0.012 * fi) + fi * 0.023));
-    float amp = i == 0 ? 0.3 : 0.45 + 0.55 * h;
-    float yi = A * w * amp;
-    float slope = dFdx(yi) / max(dFdx(p.x), 1e-5);
-    float d = abs(p.y - yi) / sqrt(1.0 + min(slope * slope, 36.0));
-    float core = exp(-d / (px * 1.2));
-    float glow = exp(-d * 55.0) * 0.07;
-    lines += (core * (i == 0 ? 0.9 : 0.45) + glow) * (0.55 + 0.45 * h);
+    float fi = float(i), k = fi / float(NL - 1);
+    float seed = (k - 0.5) * 2.2;                                   // neighbouring lines stay related
+    float y = env * (amp * trace(u, fi * 0.032, seed) + (k - 0.5) * 0.034);
+    float slope = dFdx(y) / max(dFdx(p.x), 1e-5);
+    float l = lineAt(p.y - y, slope, px * 1.5);
+    vec3 c = pal(0.32 + 0.55 * k + 0.12 * sin(PI * u));
+    col += c * l * mix(0.95, 0.5, k) * (0.45 + 0.55 * env);
   }
-  // Bound accumulated light: twelve overlapping curves must not become a bright screen wash.
-  col += lc * (1.0 - exp(-lines * (0.5 + 0.5 * uHit))) * (0.95 + 0.5 * uHit);
   fragColor = vec4(col, 1.0);
 }
 `,
