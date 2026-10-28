@@ -1,6 +1,6 @@
 // Orbit — a slowly turning sphere. With synced lyrics (LRCLIB, js/lyrics.js) the sphere is covered with the song's
-// lines: the line being sung sits in front, large and lit in the cover colour and fills from left to right as it is
-// sung; earlier lines drift up and away, the next ones wait below, curving round the globe. Without lyrics it shows
+// lines: the line being sung sits in front, large and lit as a whole in the cover colour (LRC times are per line,
+// so no invented word fill); earlier lines drift up and away, the next ones wait below, curving round the globe. Without lyrics it shows
 // latitude circles rippled by the spectrum (lows near the equator, highs near the poles).
 import { SPECTRUM_HISTORY } from "./spectrum-history.js";
 import { lineAt } from "../lyrics.js";
@@ -41,6 +41,7 @@ function drawAtlas(st, lines, cur) {
 export default {
   id: "orbit",
   name: "Orbit",
+  lyrics: false,                         // Orbit has its own lyrics globe
   bloom: 0.75,
 
   uniforms({ gl, loc, frame }) {
@@ -50,7 +51,7 @@ export default {
     if (!has) return;
     const st = atlas(gl);
     const sec = (ly.posMs || 0) / 1000;
-    const cur = Math.max(0, lineAt(lines, sec));
+    const idx = lineAt(lines, sec), cur = Math.max(0, idx);
     const key = ly.id + ":" + cur;
     if (key !== st.key) {
       st.key = key; drawAtlas(st, lines, cur);
@@ -62,7 +63,8 @@ export default {
     if (loc.uLyrics) gl.uniform1i(loc.uLyrics, 5);
     const t0 = lines[cur]?.t ?? 0, t1 = lines[cur + 1]?.t ?? t0 + 4;
     const dur = Math.max(0.3, t1 - t0), el = Math.max(0, sec - t0);
-    if (loc.uLineProg) gl.uniform1f(loc.uLineProg, Math.min(1, el / Math.max(0.3, dur - 0.3)));
+    // whole-line highlight: LRC gives line times only, so no invented word-by-word fill (none before the first line)
+    if (loc.uLineProg) gl.uniform1f(loc.uLineProg, idx < 0 ? 0 : 1);
     if (loc.uGlide) gl.uniform1f(loc.uGlide, Math.min(1, Math.max(0, (el - (dur - 0.4)) / 0.4)));
     if (loc.uLineW) gl.uniform1fv(loc.uLineW, st.widths);
   },

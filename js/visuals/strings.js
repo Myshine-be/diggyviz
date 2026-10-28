@@ -6,6 +6,7 @@
 import { SPECTRUM_HISTORY } from "./spectrum-history.js";
 
 export default {
+  lyrics: { y: 0.81, font: "light" },
   id: "strings",
   name: "Strings",
   bloom: 0.8,

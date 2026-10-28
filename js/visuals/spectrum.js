@@ -4,6 +4,7 @@
 // mirrored row → arch → ring → classic row. Lows sit in the centre (or at the left in the classic row).
 
 export default {
+  lyrics: { y: 0.8, font: "mono" },
   id: "spectrum",
   name: "Spectrum",
   bloom: 0.75,

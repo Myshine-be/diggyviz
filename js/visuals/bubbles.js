@@ -4,6 +4,7 @@
 // high notes release strings of tiny pearls from the bottom. Made to keep you watching, not to startle.
 
 export default {
+  lyrics: { y: 0.82, font: "light" },
   id: "bubbles",
   name: "Bubbles",
   bloom: 0.55,

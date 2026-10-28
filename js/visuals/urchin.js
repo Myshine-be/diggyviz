@@ -1,11 +1,29 @@
 // Urchin — a floating sphere covered in hundreds of spikes that shoot out with the music.
 // Spikes sit on a spherical Fibonacci lattice (inverse mapping after Keinert et al. / iq).
 
+import { createUrchinMotion, updateUrchin, SPIKES } from "./urchin-events.js";
+const states = new WeakMap();
 export default {
   id: "urchin",
   name: "Urchin",
+  lyrics: { y: 0.12, font: "light" },   // under the ball, behind the spike tips
   bloom: 0.35,
+  uniforms({gl,loc,frame,slot}) {
+    let st=states.get(slot);
+    if(!st) {st={motion:createUrchinMotion(),tex:null};states.set(slot,st);}
+    if(!st.tex||!gl.isTexture(st.tex)) {
+      st.tex=gl.createTexture();gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,st.tex);
+      gl.texImage2D(gl.TEXTURE_2D,0,gl.R32F,SPIKES,1,0,gl.RED,gl.FLOAT,null);
+      for(const [k,v] of [[gl.TEXTURE_MIN_FILTER,gl.NEAREST],[gl.TEXTURE_MAG_FILTER,gl.NEAREST],[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE]])gl.texParameteri(gl.TEXTURE_2D,k,v);
+    }
+    const lengths=updateUrchin(st.motion,frame.audio,frame.dt,frame.time,frame.songTime);
+    gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,st.tex);
+    gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,SPIKES,1,gl.RED,gl.FLOAT,lengths);
+    if(loc.uSpikeLengths)gl.uniform1i(loc.uSpikeLengths,4);
+  },
+  dispose(gl,slot) {const s=states.get(slot);if(s?.tex)gl.deleteTexture(s.tex);states.delete(slot);},
   frag: /* glsl */ `
+uniform sampler2D uSpikeLengths;
 const float PHI = 1.61803398875;
 const float NSPIKES = 420.0;
 
@@ -56,26 +74,9 @@ mat3 orient() {
   return rx * ry;
 }
 
-// Each spike listens to its own pitch: neighbouring spikes share a frequency region, so a note lights up a
-// patch of the ball. On every kick a different ~30 % of the spikes shoots out, on every snare/clap another ~20 %.
-float spikeFreq(vec3 q, float id) { return clamp(noise3(q * 1.7 + uSeed * 0.013) * 1.25 - 0.12 + 0.08 * hash13(vec3(id, 7.3, 1.1)), 0.0, 1.0); }
-float kickSel(float id) { return step(hash13(vec3(id, uKickN, 3.7)), 0.30); }
-float snareSel(float id) { return step(hash13(vec3(id, uSnareN + 91.0, 5.1)), 0.20); }
-
-float spikeLen(vec3 q, float id) {
-  float fq = spikeFreq(q, id);
-  float jitter = 0.85 + 0.3 * hash13(vec3(id, 1.7, 3.1));
-  float e = max(uEnergy, 0.12);
-  float raw = 0.10 + 0.22 * e
-            + 1.15 * pow(band(fq), 1.6) * e          // the level of its own pitch, with contrast
-            + 1.7 * flux(fq)                         // a new note there: shoot
-            + 2.7 * kickSel(id) * uKick              // kick group
-            + 2.0 * snareSel(id) * uSnare            // snare / clap group
-            + uDrop * 0.6;
-  // Smooth saturation keeps every tip inside the bounding sphere, even on a track change.
-  raw *= 1.0 - 0.75 * uRest;                              // a pause: the spikes withdraw
-  return 0.07 + 0.79 * (1.0 - exp(-raw * jitter));
-}
+// All 420 lengths are evaluated once per frame, not once per raymarch sample.
+// Their low/high regions follow screen height and measured hits create connected patches and travelling waves.
+float spikeLen(vec3 q,float id) {return texelFetch(uSpikeLengths,ivec2(int(id+0.5),0),0).r;}
 
 float map(vec3 p) {
   float r = length(p);
@@ -96,7 +97,7 @@ vec3 calcNormal(vec3 p) {
 
 void main() {
   vec2 p = P();
-  R = 0.46 + min(0.08, uKick * 0.03 + uDrop * 0.05);
+  R = 0.46;
   // Max extent is R(0.54) + L(0.86) = 1.40; with a 0.37 half-FOV tangent that fits the
   // portrait width from distance >= 4.03. 4.05 keeps the orb as large as possible.
   vec3 ro = vec3(0.0, 0.0, 4.05);
@@ -118,7 +119,7 @@ void main() {
     for (i = 0; i < 110; i++) {
       vec3 pos = ro + rd * t;
       d = map(pos);
-      glow += exp(-d * 28.0) * (0.15 + 0.85 * gTip) * 0.012;
+      glow += exp(-max(d,0.0) * 28.0) * (0.15 + 0.85 * gTip) * 0.004;
       if (d < 0.0008 * t) { hit = true; break; }
       // the distance only sees the nearest spike: near the ball, cap the step so long neighbours are not skipped
       t += min(d * 0.72, length(pos) < R + 0.95 ? 0.045 : 1e3);
@@ -140,7 +141,7 @@ void main() {
       // no lighting on hits at all: only the spikes move (Mo: no flashes in Urchin)
     }
   }
-  col += uPal[1] * glow * (0.3 + 0.4 * uEnergy);
+  col += uPal[1] * min(glow,0.12) * 0.3;
   fragColor = vec4(col, 1.0);
 }`,
 };

@@ -2,6 +2,7 @@
 // a hyperspace jump fires on every new track (uDrop).
 
 export default {
+  lyrics: { y: 0.78, font: "light" },
   id: "warp",
   name: "Warp",
   bloom: 1.2,

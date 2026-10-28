@@ -55,6 +55,11 @@ export class Engine {
     this.cur = null; this.old = null; this.fade = 1;
     this.mixT = this.bloomA = this.bloomB = null;
     this.artTex = this.#texture(2, 2);
+    // lyrics layer (js/lyrics-layer.js): canvas atlas, uploaded only when its lines change; texture unit 6 in the final pass
+    this.lyrTex = gl.createTexture(); this.lyrVersion = -1; this.lyrCanvas = null; this.lyrOn = 0;
+    gl.bindTexture(gl.TEXTURE_2D, this.lyrTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
+    for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
     // sound data for the shaders (js/audio-data.js): 128 x 65 bytes, exact texel reads
     this.audioTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.audioTex);
@@ -177,6 +182,22 @@ export class Engine {
     this.#pass(this.post.blur, this.bloomA, (u) => { u.tex("uSrc", this.bloomB.tex, 0); u.v2("uDir", 0, 1 / this.BH); });
     this.#pass(this.post.blur, this.bloomB, (u) => { u.tex("uSrc", this.bloomA.tex, 0); u.v2("uDir", 2 / this.BW, 0); });
     this.#pass(this.post.blur, this.bloomA, (u) => { u.tex("uSrc", this.bloomB.tex, 0); u.v2("uDir", 0, 2 / this.BH); });
+    // lyrics layer: removed at once (track change, no lyrics), fades in softly when lines appear
+    const ly = f.lyricLayer;
+    if (ly) {
+      if (ly.version !== this.lyrVersion || ly.canvas !== this.lyrCanvas) {
+        this.lyrVersion = ly.version; this.lyrCanvas = ly.canvas;
+        gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, this.lyrTex);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, ly.canvas);
+      }
+      if (this.lyrVis !== this.cur.vis.id) { this.lyrVis = this.cur.vis.id; this.lyrOn = 0; }   // new visual: new placement, fade in
+      this.lyrOn = Math.min(1, this.lyrOn + f.dt / 0.35);
+    } else this.lyrOn = 0;
+    const P = f.pal, c01 = (a) => a.map((v) => v / 255);
+    const lift = (a, k) => a.map((v) => v + (1 - v) * k);
+    const ink = ly?.ink || lift(c01(P?.mid || [200, 200, 200]), 0.78);
+    const accent = ly?.accent || lift(c01(P?.hi || [255, 200, 120]), 0.18);
     // final
     const bloomAmt = (this.cur.vis.bloom ?? 0.9) * ease + (this.old ? (this.old.vis.bloom ?? 0.9) * (1 - ease) : 0);
     this.#pass(this.post.final, null, (u) => {
@@ -184,6 +205,12 @@ export class Engine {
       u.f("uBloomAmt", bloomAmt); u.f("uTime", f.time); u.f("uGrain", 0.035);
       u.f("uGrade", (this.cur.vis.grade ?? 1) * ease + (this.old ? (this.old.vis.grade ?? 1) * (1 - ease) : 0));
       u.f("uRest", f.audio.rest ?? 0);
+      u.f("uLyrOn", ly ? this.lyrOn : 0);
+      if (ly) {
+        u.tex("uLyr", this.lyrTex, 6);
+        u.f("uLyrY", typeof ly.y === "object" ? (this.W >= this.H ? ly.y.land : ly.y.port) : ly.y); u.f("uLyrGlide", ly.glide); u.f("uLyrEmph", ly.emph); u.f("uLyrHasCur", ly.hasCur); u.f("uLyrOcc", ly.occlude);
+        u.v2("uLyrClip", ...(ly.clip || [0, 1])); u.v2("uLyrWord", ly.word[0], ly.word[1]); u.v3("uLyrInk", ...ink); u.v3("uLyrAccent", ...accent);
+      }
     });
   }
 
@@ -236,6 +263,7 @@ export class Engine {
     const u = {
       f: (n, v) => L[n] && gl.uniform1f(L[n], v),
       v2: (n, x, y) => L[n] && gl.uniform2f(L[n], x, y),
+      v3: (n, x, y, z) => L[n] && gl.uniform3f(L[n], x, y, z),
       tex: (n, t, unit) => { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t); if (L[n]) gl.uniform1i(L[n], unit); },
     };
     if (L.uRes) gl.uniform2f(L.uRes, w, h);
@@ -309,7 +337,7 @@ export class Engine {
   }
 
   #free(t) { if (!t) return; this.gl.deleteFramebuffer(t.fb); this.gl.deleteTexture(t.tex); }
-  #freeSlot(s) { s.t.forEach((t) => this.#free(t)); }
+  #freeSlot(s, targetsOnly = false) { s.t.forEach((t) => this.#free(t)); if (!targetsOnly && s.vis.dispose) s.vis.dispose(this.gl, s); }
 
   #resize(force = false) {
     const dpr = Math.min(3, window.devicePixelRatio || 1);
@@ -328,7 +356,7 @@ export class Engine {
       const previous = s.t[s.i];
       const targets = (s.frozen || !s.vis.feedback) ? [this.#target(RW, RH)] : [this.#target(RW, RH), this.#target(RW, RH)];
       targets.forEach((target) => this.#copy(previous, target));
-      this.#freeSlot(s); s.t = targets; s.i = 0;
+      this.#freeSlot(s, true); s.t = targets; s.i = 0;
     }
   }
 

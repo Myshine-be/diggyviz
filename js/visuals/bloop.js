@@ -7,6 +7,7 @@
 import { STORY_SHAPES } from "./story-shapes.js";
 
 export default {
+  lyrics: { y: 0.84, font: "sans" },
   id: "bloop", name: "Bloop", story: true, duration: 120, bloom: 0.5,
   frag: STORY_SHAPES + /* glsl */ `
 const float SP = 0.22;      // platform spacing (world units per beat)
