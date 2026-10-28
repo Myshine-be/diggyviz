@@ -147,3 +147,8 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 #sysRow:not([hidden]) { display: flex; flex-direction: column; gap: 10px; }
 .field select { font: 15px var(--f-body); color: var(--ink); background: rgba(0,0,0,0.35); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; text-transform: none; letter-spacing: 0; }
 .steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+
+/* Clean screen (2.7): no buttons under the visual. Everything lives in Settings (gear) and on the keyboard
+   (← → visual, F full screen, Space play/pause, T tap tempo, D diagnostics) or swipe on a phone.
+   The buttons stay in the DOM so app.js keeps working; only the status line is shown. */
+.hud-bottom .chips, .hud-bottom .controls { display: none !important; }

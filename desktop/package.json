@@ -1,0 +1,46 @@
+{
+  "name": "diggyviz",
+  "productName": "DiggyViz",
+  "version": "0.1.0",
+  "description": "DiggyViz voor Windows: live visuals op het geluid van je computer",
+  "main": "main.js",
+  "author": "Mo",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis portable --x64"
+  },
+  "devDependencies": {
+    "electron": "44.7.1",
+    "electron-builder": "26.16.1"
+  },
+  "build": {
+    "appId": "be.myshine.diggyviz",
+    "productName": "DiggyViz",
+    "files": [
+      "main.js",
+      "preload.js",
+      "offline.html",
+      "build/**"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "DiggyViz-Setup-${version}.exe",
+      "installerIcon": "build/icon.ico",
+      "shortcutName": "DiggyViz"
+    },
+    "portable": {
+      "artifactName": "DiggyViz-${version}-portable.exe"
+    }
+  }
+}

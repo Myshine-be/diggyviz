@@ -15,6 +15,7 @@ import { createListener } from "./listen.js";
 import { createTabListener } from "./tab-audio.js";
 import { createSystemListener, listInputs, permissionGranted } from "./system-audio.js";
 import { createFilePlayer } from "./file-player.js";
+import { createDesktopListener, isDesktop } from "./desktop-audio.js";
 import { audioData, setWave, feedHistory, synthWave, resetAudioData, WAVE_N } from "./audio-data.js";
 
 if (window.__bridge) throw new Error("iOS bridge redirect");
@@ -37,6 +38,8 @@ let tempoOrigin = "default";
 let tempoAuto = false;   // true while the tempo comes from the Deezer lookup (not tapped)
 const listener = createListener({ onStatus: (m, err) => status(m, err), onChange: () => listenChanged() });
 const tabIn = createTabListener({ onStatus: (m, err) => status(m, err), onChange: () => tabChanged() });
+// Windows app: the computer's own sound via WASAPI loopback, granted by the app itself (no prompt, no setup)
+const deskIn = createDesktopListener({ onStatus: (m, err) => status(m, err), onChange: () => showTempo() });
 const sysIn = createSystemListener({ onStatus: (m, err) => status(m, err), onChange: () => sysChanged(),
   getDevice: () => store.get("sysDevice", ""), setDevice: (id) => store.set("sysDevice", id) });
 const player = createFilePlayer({ onStatus: (m, err) => status(m, err), onChange: () => showPlayer() });
@@ -44,6 +47,7 @@ const player = createFilePlayer({ onStatus: (m, err) => status(m, err), onChange
 // Which real sound drives the visuals right now: own music > shared tab > microphone > none (simulated rhythm).
 function soundInput() {
   if (sourceName === "file" && player.active) return { kind: "file", io: player };
+  if (deskIn.active) return { kind: "desktop", io: deskIn };
   if (sysIn.active) return { kind: "system", io: sysIn };
   if (tabIn.active) return { kind: "tab", io: tabIn };
   if (listener.active) return { kind: "mic", io: listener };
@@ -102,11 +106,12 @@ function loadTempo(defBpm = 120) {
 function showTempo() {
   const inp = soundInput();
   const source = inp ? (inp.io.receiving ? inp.kind : inp.kind === "file" ? "paused" : "interrupted") : tempoOrigin;
-  const labels = { file: "LIVE", tab: "LIVE", system: "LIVE", paused: "PAUZE", mic: "MIC", interrupted: "WACHT", found: "AUTO", tapped: "BPM", demo: "DEMO", loading: "ZOEK", missing: "SCHAT", unavailable: "SCHAT", default: "SCHAT" };
+  const labels = { file: "LIVE", tab: "LIVE", system: "LIVE", desktop: "LIVE", paused: "PAUZE", mic: "MIC", interrupted: "WACHT", found: "AUTO", tapped: "BPM", demo: "DEMO", loading: "ZOEK", missing: "SCHAT", unavailable: "SCHAT", default: "SCHAT" };
   const notes = {
     file: "Eigen muziek: het echte geluid, exact op de beat. Tempo gemeten.",
     tab: "Tab-geluid: het echte geluid van het tabblad. Tempo gemeten.",
     system: "Computergeluid: het echte geluid van je computer. Tempo gemeten.",
+    desktop: "Windows-app: het echte geluid van je computer, live. Tempo gemeten.",
     paused: "Muziek gepauzeerd.",
     mic: "Microfoon: gemeten geluid; het tempo is een schatting.",
     interrupted: "Geluidsingang onderbroken of geblokkeerd. Tik op het scherm; controleer de ingang als dit blijft staan.",
@@ -347,7 +352,7 @@ $("listenRow").hidden = !listener.supported;
 $("listenBtn").addEventListener("click", (e) => { e.stopPropagation(); setListen(!(listener.active || listener.starting)); });
 $("listenChk").addEventListener("change", (e) => setListen(e.target.checked));
 // Browsers only allow the microphone after a tap, so a saved "on" resumes on the first interaction.
-if (listener.supported && store.get("listen", false)) {
+if (!isDesktop() && listener.supported && store.get("listen", false)) {
   document.addEventListener("pointerdown", function resume(e) {
     document.removeEventListener("pointerdown", resume, true);
     if (listenReq === 0 && !store.get("sys", false) && !listener.active && !listener.starting && e.target?.id !== "listenBtn" && e.target?.id !== "listenChk") setListen(true);
@@ -431,7 +436,7 @@ $("sysDevice").addEventListener("change", (e) => {
   if (sysIn.active || sysIn.starting) { setSys(false, true); setSys(true); }
 });
 // Saved "on": start right away when the browser already allows the input, else on the first tap.
-if (sysIn.supported && store.get("sys", false)) {
+if (!isDesktop() && sysIn.supported && store.get("sys", false)) {
   permissionGranted().then((granted) => {
     if (sysReq !== 0 || !store.get("sys", false)) return;
     if (granted) setSys(true);
@@ -467,6 +472,21 @@ async function setTab(on) {
 }
 $("tabBtn").hidden = !tabIn.supported;
 $("tabRow").hidden = !tabIn.supported;
+
+/* Windows app: system sound starts by itself (desktop/main.js calls startDesktopAudio with a user gesture);
+   a click on the picture reconnects it if it ever stops. The browser-only inputs are not offered there. */
+async function startDesktopAudio() {
+  if (!deskIn.supported || deskIn.active || deskIn.starting) return deskIn.active;
+  const ok = await deskIn.start();
+  if (ok) status("Live: DiggyViz hoort wat je computer afspeelt.");
+  showTempo();
+  return ok;
+}
+if (isDesktop()) {
+  for (const id of ["sysRow", "listenRow", "tabRow", "sysBtn", "listenBtn", "tabBtn"]) $(id).hidden = true;
+  $("deskNote").hidden = false;
+  document.addEventListener("pointerdown", () => { if (!deskIn.active && !deskIn.starting) startDesktopAudio(); }, true);
+}
 $("tabBtn").addEventListener("click", (e) => { e.stopPropagation(); setTab(!(tabIn.active || tabIn.starting)); });
 $("tabChk").addEventListener("change", (e) => setTab(e.target.checked));
 
@@ -561,4 +581,4 @@ $("version").textContent = "DiggyViz " + CONFIG.VERSION;
 })();
 
 // test/debug hook
-window.diggy = { player, tabIn, sysIn, get soundInput() { return soundInput()?.kind ?? null; }, setVisual, stepVisual, get engine() { return engine; }, onTrack, useSource, audio, setListen, setSys, setTab, get listening() { return listener.active; }, get tempo() { return { ...tempo, auto: tempoAuto }; } };
+window.diggy = { player, tabIn, sysIn, deskIn, startDesktopAudio, get soundInput() { return soundInput()?.kind ?? null; }, setVisual, stepVisual, get engine() { return engine; }, onTrack, useSource, audio, setListen, setSys, setTab, get listening() { return listener.active; }, get tempo() { return { ...tempo, auto: tempoAuto }; } };

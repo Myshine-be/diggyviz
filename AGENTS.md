@@ -141,3 +141,23 @@ closed for apps created after Nov 2024 — do not build on those. Windows setup 
 - `createListener` passes an AbortSignal to acquisition. Check it between permission probes, enumeration and final capture; release late streams without saving their device.
 - Autoplay-blocked contexts remain reachable by pointerdown and stop. Never await a potentially indefinitely pending `resume()` before exposing resources.
 - `latency` is optional track `getSettings().latency`; `contextLatency` is AudioContext.baseLatency, an output-processing metric. Neither measures total delay to the visual. Preserve the faster 2.5.1 envelope/history path.
+
+## Windows app (2.7) — `desktop/`
+- A thin Electron shell that loads the live site (https://myshine-be.github.io/diggyviz/; `DIGGYVIZ_URL` overrides it for
+  tests). The web app itself stays build-free; npm is only used inside `desktop/`.
+- `desktop/main.js` answers every `getDisplayMedia()` itself with the screen + `audio: "loopback"` (WASAPI system sound on
+  Windows): no picker, no Stereo-mix, no sharing bar. It starts the sound with `executeJavaScript(…, userGesture=true)`
+  → `window.diggy.startDesktopAudio()`. Navigation is limited to the app origin and Spotify login; other links open
+  in the normal browser. Spotify PKCE works unchanged because the redirect is the same hosted URL.
+- `js/desktop-audio.js`: `isDesktop()` (preload sets `window.diggyDesktop`) and `createDesktopListener()` (same analysis
+  as listen.js, `audioOnly()` from tab-audio.js). Input order: own music > desktop > computer sound > tab > microphone.
+  In the app the browser-only inputs (Computergeluid, microphone, tab) are hidden; `#deskNote` explains.
+- Build: `cd desktop && npm ci && npx electron-builder --win nsis portable --x64` on Windows, or push a tag `desktop-v*`
+  (workflow `.github/workflows/desktop.yml` attaches Setup + portable .exe to a Release). On Linux only the unpacked
+  app can be built (NSIS needs wine). Not code-signed: Windows SmartScreen asks once.
+- Smoke test (Linux, Xvfb): `DIGGYVIZ_URL=http://127.0.0.1:8765/ DIGGYVIZ_SMOKE=12000 xvfb-run -a desktop/node_modules/electron/dist/electron desktop --no-sandbox`
+  prints the app state; on Linux the loopback itself fails (no ALSA loopback), which is expected.
+
+## Clean screen (2.7)
+No buttons under the visual (`.hud-bottom .chips/.controls` hidden in css). Only the status line shows there. Controls:
+← → / swipe (visual), F (full screen), Space (own music), T (tap tempo), D (diagnostics), Settings (gear).

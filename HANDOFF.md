@@ -1,3 +1,64 @@
+# Overdracht 2.7 (Claude → ChatGPT) — 28 oktober 2026
+
+Lees ook `AGENTS.md`, met de secties "Windows app (2.7)" en "Clean screen (2.7)".
+
+## Wat Mo vroeg
+1. **Echte live beatsync met Spotify, zoals een PSP.** Zonder tabblad delen, en later als app.
+2. **Geen knoppen meer onder de visual.** Tab-geluid, Microfoon, BPM, Auto, Volledig scherm en de visual-chips moeten allemaal weg.
+3. **Eerst de Windows-app.** Daarna bekijken we wat beter kan.
+4. **Lezen wat ChatGPT achterliet.** Gedaan: `docs/review-2.6.2.md` en de 2.6.2-wijzigingen zijn gelezen en zijn de basis.
+
+## Waarom een app (en geen Spotify-API)
+- **Geen geluid van Spotify:** Spotify geeft geen audio of PCM af. De Web Playback SDK is DRM.
+- **Geen beat-data:** audio-analysis en audio-features zijn sinds 27-11-2024 dicht voor nieuwe apps.
+- **Geen uitgebreide toegang:** die krijgen sinds 15-05-2025 enkel organisaties met minstens 250k MAU.
+- **Wat de API wel geeft:** alleen metadata, positie en tempo. Dat is geen live sync.
+- **Live sync vraagt dus het echte geluid van het toestel.**
+  - Windows: WASAPI-loopback. Dat is gedaan.
+  - Android: AudioPlaybackCapture. Dat is de volgende stap.
+  - iPhone: kan niet (alleen microfoon of eigen muziek).
+
+## Wat af is (versie 2.7.0)
+- **Knoppen weg.**
+  - In `css/app.css` worden `.hud-bottom .chips` en `.hud-bottom .controls` verborgen. Alleen de statusregel blijft.
+  - De knoppen blijven in de DOM, zodat `app.js` en de tests blijven werken.
+  - In Instellingen staat een notitie met de toetsen: ← → wisselen, F volledig scherm, Spatie afspelen/pauzeren, T meetikken, D diagnose. Op de telefoon swipe je.
+  - Getest met Playwright: de knoppen zijn onzichtbaar en de pijltjes wisselen nog van visual.
+- **Windows-app, `desktop/` (Electron 44.7.1, electron-builder 26.16.1).**
+  - `main.js`:
+    - laadt de live site;
+    - beantwoordt `getDisplayMedia` zelf met scherm + `audio: "loopback"`, zonder kiezer of balk;
+    - start het geluid met `executeJavaScript(…, true)`;
+    - laat alleen navigatie toe naar de site en de Spotify-login;
+    - heeft een offline-pagina, F11 voor volledig scherm, en geen menu.
+  - `preload.js`: zet `window.diggyDesktop`.
+  - Eigen app-icoon: `desktop/build/icon.png` en `icon.ico`.
+  - Workflow `.github/workflows/desktop.yml`: bouwt bij een tag `desktop-v*` een Setup-exe en een portable exe op windows-latest en zet die bij een Release.
+- **Webcode.**
+  - `js/desktop-audio.js` (`isDesktop`, `createDesktopListener`).
+  - In `app.js` heeft desktop voorrang op de andere ingangen.
+  - `startDesktopAudio()`: verbindt opnieuw bij een klik.
+  - In de app worden de browser-ingangen verborgen; `#deskNote` legt het uit.
+  - `tests/desktop-audio.test.mjs`.
+- **Tests:**
+  - 74 Node-tests slagen;
+  - `tests/browser.mjs` slaagt;
+  - een Electron-rooktest onder Xvfb: de handler wordt automatisch aangeroepen (1×), `diggyDesktop` is aanwezig, de rijen in Instellingen zijn verborgen en de onderste knoppen zijn onzichtbaar.
+  - Loopback zelf faalt op Linux, zoals verwacht (geen ALSA-loopback).
+
+## Niet getest / open
+1. **Echte Windows-loopback op Mo's laptop.** Starten → Spotify-app spelen → BPM LIVE en D-overlay. Dit is de belangrijkste test.
+   - Vraagt Chrome/Electron op Windows toch iets, of blijft het geluid stil: kijk eerst naar `setDisplayMediaRequestHandler` (sources[0] = scherm) en of `audio: 'loopback'` een audiospoor geeft.
+   - Debug met `DIGGYVIZ_DEBUG=1` vanaf de commandline.
+2. **Installer.** De Windows-installer werd hier niet gebouwd: NSIS heeft wine nodig. Mo kreeg een zip met de uitgepakte app (DiggyViz.exe). Een echte Setup komt uit de workflow (tag `desktop-v0.1.0` is gepusht). Controleer of die run slaagde.
+3. **Ondertekening.** De app is niet ondertekend, dus SmartScreen vraagt "Toch uitvoeren". Ondertekenen kan later.
+4. **Mac-versie.** Electron kan systeemgeluid op macOS 14.2+ (CoreAudio Tap, NSAudioCaptureUsageDescription). Nog niet gedaan.
+5. **Android-app.** Volgende stap volgens Mo: AudioPlaybackCapture (MediaProjection, Android 10+).
+6. **iPhone.** Geen systeemgeluid mogelijk. Dat moet zo eerlijk blijven.
+7. **Vertraging.** Pas meten in de app met toets D. Loopback slaat de tab-omweg over; de totale vertraging is niet gemeten.
+
+---
+
 # Afgewerkt door Codex — 26 oktober 2026
 
 De oorspronkelijke overdracht hieronder beschrijft de WIP op `9b77f3d`; die wijzigingen waren al gecommit. Zie `docs/afronding-2.5.md` voor de afwerking en testgrenzen.
