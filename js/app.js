@@ -286,6 +286,8 @@ function showDiag(inp) {
     `render ${e?.RW ?? "–"}×${e?.RH ?? "–"} van ${c.width}×${c.height} · schaal ${e ? e.scale.toFixed(2) : "–"}`,
     `visual ${e?.currentVisual?.id ?? "–"} · invoer ${inp ? inp.kind : "gesimuleerd"}${inp?.io.inputName ? " (" + inp.io.inputName + ")" : ""}`,
     `invoerlatentie (apparaat) ${inp && Number.isFinite(inp.io.latency) ? Math.round(inp.io.latency * 1000) + " ms" : "onbekend"}`,
+    `geluid binnen: ${inp ? (inp.io.receiving ? "ja" : "nee") : "geen echte ingang"} · niveau ${audio.level.toFixed(2)} · kick ${audio.kick.toFixed(2)} · ${Math.round(inp ? inp.io.bpm : tempo.bpm)} BPM`,
+    `app: ${isDesktop() ? "Windows-app " + (window.diggyDesktop?.version || "") + (deskIn.active ? " · systeemgeluid aan" : deskIn.starting ? " · systeemgeluid start…" : " · systeemgeluid UIT") : "browser"} · DiggyViz ${CONFIG.VERSION}`,
     "Totale vertraging tot het beeld is niet gemeten.",
   ].join("\n");
 }

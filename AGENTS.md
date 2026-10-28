@@ -159,5 +159,5 @@ closed for apps created after Nov 2024 — do not build on those. Windows setup 
   prints the app state; on Linux the loopback itself fails (no ALSA loopback), which is expected.
 
 ## Clean screen (2.7)
-No buttons under the visual (`.hud-bottom .chips/.controls` hidden in css). Only the status line shows there. Controls:
+No control buttons under the visual (`.hud-bottom .controls` hidden in css). The visual chips (`#chips`) MUST stay visible: they are the only way to pick a visual by touch/mouse (lesson: hiding them in 2.7.0 left Mo unable to switch visuals). Controls:
 ← → / swipe (visual), F (full screen), Space (own music), T (tap tempo), D (diagnostics), Settings (gear).
