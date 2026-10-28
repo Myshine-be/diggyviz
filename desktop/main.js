@@ -35,6 +35,7 @@ function createWindow() {
   win.webContents.on("before-input-event", (e, input) => {
     if (input.type !== "keyDown") return;
     if (input.key === "F11") { win.setFullScreen(!win.isFullScreen()); e.preventDefault(); }
+    else if (input.key === "F5" || (input.control && input.key.toLowerCase() === "r")) { win.webContents.reloadIgnoringCache(); e.preventDefault(); }
     else if (input.key === "Escape" && win.isFullScreen()) { win.setFullScreen(false); }
   });
 
@@ -69,6 +70,8 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // always start from the newest version of the site (GitHub Pages caches for 10 minutes)
+  session.defaultSession.clearCache().catch(() => {});
   // Answer every getDisplayMedia() of the app with the whole screen + Windows loopback audio, without a picker.
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
     if (!allowed(request.securityOrigin || request.frame?.url || START_URL)) { callback({}); return; }
