@@ -152,3 +152,12 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
    (← → visual, F full screen, Space play/pause, T tap tempo, D diagnostics) or swipe on a phone.
    The buttons stay in the DOM so app.js keeps working; only the status line is shown. */
 .hud-bottom .controls { display: none !important; }   /* the visual chips stay: they are how you pick a visual */
+
+/* Windows app (frameless window): invisible drag strip + small window buttons; they hide with the HUD */
+.deskbar { top: 0; height: 34px; padding: 0 !important; gap: 0; align-items: stretch; z-index: 6; }
+.deskdrag { flex: 1; -webkit-app-region: drag; }
+.deskbtn { -webkit-app-region: no-drag; width: 46px; border: 0; background: transparent; color: var(--ink-2); font-size: 14px; }
+.deskbtn:hover { background: rgba(255,255,255,0.1); color: var(--ink); }
+.deskbtn.close:hover { background: #c42b1c; color: #fff; }
+html.desktop .hud-top { top: 34px; }
+.app.idle .deskbar { transform: translateY(-8px); }

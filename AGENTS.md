@@ -161,3 +161,10 @@ closed for apps created after Nov 2024 — do not build on those. Windows setup 
 ## Clean screen (2.7)
 No control buttons under the visual (`.hud-bottom .controls` hidden in css). The visual chips (`#chips`) MUST stay visible: they are the only way to pick a visual by touch/mouse (lesson: hiding them in 2.7.0 left Mo unable to switch visuals). Controls:
 ← → / swipe (visual), F (full screen), Space (own music), T (tap tempo), D (diagnostics), Settings (gear).
+
+## Frameless window (2.7.2, app 0.1.2)
+The app window has no Windows title bar (`frame: false`; Mo's accent colour made it a red bar). The page draws its own
+`#deskBar` (desktop only): an invisible drag strip (`-webkit-app-region: drag`, double-click = maximise) and – ▢ ✕ buttons
+that call `window.diggyDesktop.minimize/toggleMaximize/close` → IPC "win" in desktop/main.js. It is a `.hud`, so it hides
+with the HUD after 4 s. `html.desktop .hud-top` moves the top HUD below it. In a normal browser nothing changes.
+App 0.1.1+ clears the HTTP cache at start and reloads with F5 / Ctrl+R (GitHub Pages caches 10 minutes).

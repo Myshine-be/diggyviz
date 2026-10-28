@@ -1,3 +1,16 @@
+# Stand 28 oktober 2026, avond (Claude)
+- **Windows-app getest door Mo:** de live beatsync werkt via WASAPI-loopback ("invoer desktop", 119 fps, invoerlatentie 10 ms).
+- **2.7.1:** de visual-keuze (chips) onderaan is terug. Die mag niet meer verborgen worden.
+  - Toets D toont nu of er geluid binnenkomt, het niveau, de kick en of het systeemgeluid aan staat.
+- **App 0.1.1:** wist de cache bij de start (anders kon de oude site tot 10 min blijven hangen) en herlaadt met F5 / Ctrl+R.
+- **2.7.2 / app 0.1.2:** de Windows-titelbalk is weg (frameless). Er zijn eigen knoppen – ▢ ✕ en een sleepstrook; die verdwijnen samen met de HUD. Zie AGENTS.md "Frameless window".
+- **Open:**
+  - echte installer via de workflow (met de hand starten in Actions);
+  - Mac-versie;
+  - Android-app.
+
+---
+
 # Overdracht 2.7 (Claude → ChatGPT) — 28 oktober 2026
 
 Lees ook `AGENTS.md`, met de secties "Windows app (2.7)" en "Clean screen (2.7)".

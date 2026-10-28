@@ -487,6 +487,14 @@ async function startDesktopAudio() {
 if (isDesktop()) {
   for (const id of ["sysRow", "listenRow", "tabRow", "sysBtn", "listenBtn", "tabBtn"]) $(id).hidden = true;
   $("deskNote").hidden = false;
+  // frameless window: our own drag strip and window buttons, hidden together with the HUD
+  document.documentElement.classList.add("desktop");
+  $("deskBar").hidden = false;
+  const D = window.diggyDesktop;
+  $("deskMin").addEventListener("click", () => D.minimize?.());
+  $("deskMax").addEventListener("click", () => D.toggleMaximize?.());
+  $("deskClose").addEventListener("click", () => D.close?.());
+  $("deskDrag").addEventListener("dblclick", () => D.toggleMaximize?.());
   document.addEventListener("pointerdown", () => { if (!deskIn.active && !deskIn.starting) startDesktopAudio(); }, true);
 }
 $("tabBtn").addEventListener("click", (e) => { e.stopPropagation(); setTab(!(tabIn.active || tabIn.starting)); });

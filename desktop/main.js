@@ -2,7 +2,7 @@
 // What the shell adds: the computer's own sound (WASAPI loopback) without Stereo-mix, sharing, prompts or bars.
 // The page asks getDisplayMedia(); this process answers it itself with a screen source + audio "loopback".
 // The page keeps only the audio track (js/desktop-audio.js). Nothing is recorded or sent.
-const { app, BrowserWindow, session, desktopCapturer, shell, Menu } = require("electron");
+const { app, BrowserWindow, session, desktopCapturer, shell, Menu, ipcMain } = require("electron");
 const path = require("node:path");
 
 const START_URL = process.env.DIGGYVIZ_URL || "https://myshine-be.github.io/diggyviz/";
@@ -25,11 +25,13 @@ const log = (...a) => { if (process.env.DIGGYVIZ_DEBUG) console.log("[diggyviz]"
 function createWindow() {
   win = new BrowserWindow({
     width: 1280, height: 760, backgroundColor: "#050506", title: "DiggyViz", autoHideMenuBar: true, show: false,
+    frame: false,                                  // no Windows title bar: the page shows its own small controls (auto-hidden)
     icon: path.join(__dirname, "build", "icon.png"),
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, sandbox: true, backgroundThrottling: false },
   });
   Menu.setApplicationMenu(null);
   win.once("ready-to-show", () => win.show());
+  if (process.env.DIGGYVIZ_DEBUG) win.webContents.on("console-message", (e) => log("console:", e.message || e));
 
   // F11 / Escape for full screen even when the page has no focus on a button
   win.webContents.on("before-input-event", (e, input) => {
@@ -63,11 +65,28 @@ function createWindow() {
     const state = await win.webContents.executeJavaScript(`JSON.stringify({ desktop: !!window.diggyDesktop, hasDiggy: !!window.diggy,
       input: window.diggy?.soundInput ?? null, deskStarting: window.diggy?.deskIn?.starting, deskActive: window.diggy?.deskIn?.active,
       status: document.getElementById('status')?.textContent, deskNote: !document.getElementById('deskNote')?.hidden,
-      sysRowHidden: document.getElementById('sysRow')?.hidden, bottomButtonsVisible: [...document.querySelectorAll('.hud-bottom .controls, .hud-bottom .chips')].some(e => e.offsetParent) })`).catch((e) => JSON.stringify({ error: e.message }));
+      sysRowHidden: document.getElementById('sysRow')?.hidden, deskBarShown: !document.getElementById('deskBar')?.hidden, deskBarOpacity: getComputedStyle(document.getElementById('deskBar')).opacity, htmlDesktop: document.documentElement.classList.contains('desktop'), chipsVisible: !!document.getElementById('chips')?.offsetParent, bottomButtonsVisible: [...document.querySelectorAll('.hud-bottom .controls, .hud-bottom .chips')].some(e => e.offsetParent) })`).catch((e) => JSON.stringify({ error: e.message }));
     console.log("SMOKE " + state + " handlerCalls=" + handlerCalls);
+    if (process.env.DIGGYVIZ_SMOKE_SHOT) {
+      await win.webContents.executeJavaScript("document.getElementById('app').classList.remove('idle'); 1");
+      await new Promise((r) => setTimeout(r, 700));
+      require("node:fs").writeFileSync(process.env.DIGGYVIZ_SMOKE_SHOT, (await win.webContents.capturePage()).toPNG());
+      await win.webContents.executeJavaScript("window.diggyDesktop.minimize(); 1");
+      await new Promise((r) => setTimeout(r, 700));
+      console.log("SMOKE minimized=" + win.isMinimized());
+    }
     app.quit();
   }, Number(process.env.DIGGYVIZ_SMOKE) || 9000);
 }
+
+// window controls for the frameless window (desktop/preload.js → page buttons)
+ipcMain.on("win", (e, cmd) => {
+  const w = BrowserWindow.fromWebContents(e.sender); if (!w) return;
+  log("window control:", cmd);
+  if (cmd === "min") w.minimize();
+  else if (cmd === "max") { if (w.isFullScreen()) w.setFullScreen(false); else if (w.isMaximized()) w.unmaximize(); else w.maximize(); }
+  else if (cmd === "close") w.close();
+});
 
 app.whenReady().then(() => {
   // always start from the newest version of the site (GitHub Pages caches for 10 minutes)
