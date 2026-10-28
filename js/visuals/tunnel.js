@@ -5,6 +5,7 @@
 export default {
   id: "tunnel",
   name: "Tunnel",
+  lyrics: { y: 0.5, font: "light" },     // in the dark open passage, behind the walls
   bloom: 0.6,
   feedback: true,
   frag: /* glsl */ `

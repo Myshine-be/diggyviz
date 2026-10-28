@@ -36,3 +36,86 @@ test('no lyrics → state none, and the next ask does not fetch again', async ()
   L.linesFor({ id: 'q', name: 't', artists: 'a' });
   assert.equal(L.stateFor('q'), 'none'); assert.equal(n, 2);
 });
+
+// ---- 3.0: lyrics layer ----
+import { lyricView, GLIDE_SEC } from '../js/lyrics.js';
+import { wrapLine } from '../js/lyrics-layer.js';
+
+const L3 = parseLRC('[00:01.00]one\n[00:05.00]two\n[00:09.00]\n[00:12.00]three\n[00:16.00]four');
+
+test('enhanced LRC keeps real word times and strips them from the text; plain LRC has no word timing', () => {
+  const l = parseLRC('[00:10.00]<00:10.00>Hello <00:10.60>bright <00:11.20>world');
+  assert.equal(l[0].text, 'Hello bright world');
+  assert.deepEqual(l[0].words.map((w) => [w.t, w.text]), [[10, 'Hello'], [10.6, 'bright'], [11.2, 'world']]);
+  assert.equal(parseLRC('[00:01.00]plain line')[0].words, undefined);
+  assert.equal(lyricView(l, 10.7).word, 1);
+  assert.equal(lyricView(L3, 6).word, -1);              // never invented
+});
+
+test('no synced lines or no known position → nothing is shown', () => {
+  assert.equal(lyricView([], 3), null);
+  assert.equal(lyricView(L3, 3, false), null);          // Last.fm: position only guessed
+  assert.equal(lyricView(L3, NaN), null);
+  assert.equal(lyricView(parseLRC('[00:01.00]\n[00:02.00]'), 1.5), null);
+});
+
+test('before the first line and in an instrumental gap there is no current line', () => {
+  const a = lyricView(L3, 0.5);
+  assert.equal(a.cur, -1); assert.equal(L3[a.show[a.at]].text, 'one');
+  const g = lyricView(L3, 10);
+  assert.equal(g.cur, -1); assert.equal(L3[g.show[g.at]].text, 'three');
+  assert.ok(!g.show.some((i) => !L3[i].text));          // empty lines are never drawn
+});
+
+test('a normal step to the next line slides softly; the current line then stands still', () => {
+  const start = lyricView(L3, 5.0), mid = lyricView(L3, 5 + GLIDE_SEC / 2), done = lyricView(L3, 6.5);
+  assert.equal(L3[start.show[start.cur]].text, 'two');
+  assert.equal(start.glide, 0); assert.ok(mid.glide > 0 && mid.glide < 1); assert.equal(done.glide, 1);
+  assert.equal(done.emph, 1);
+});
+
+test('seek, pause and resume: the right line at once, no slide', () => {
+  const seek = lyricView(L3, 14.0);                     // jumped into the middle of "three"
+  assert.equal(L3[seek.show[seek.cur]].text, 'three'); assert.equal(seek.glide, 1);
+  const paused = lyricView(L3, 14.0);                   // paused: the position stands still → same view
+  assert.deepEqual(paused, seek);
+  const back = lyricView(L3, 2.0);                      // seek backwards
+  assert.equal(L3[back.show[back.cur]].text, 'one');
+  const afterGap = lyricView(L3, 12.1);                 // first line after a gap: no slide, the highlight eases in
+  assert.equal(afterGap.glide, 1); assert.ok(afterGap.emph < 1);
+});
+
+test('a track change removes the old text at once and a late answer for the old track is never shown', async () => {
+  const pending = {};
+  const fetchFn = (url) => new Promise((res) => { pending[new URL(url).searchParams.get('track_name')] = res; });
+  const Ly = createLyrics({ fetchFn });
+  const A = { id: 'A', name: 'Alpha', artists: 'X', dur: 100000 }, B = { id: 'B', name: 'Beta', artists: 'Y', dur: 100000 };
+  Ly.linesFor(A); Ly.linesFor(B);                       // A requested, then the song changes to B
+  pending.Alpha({ ok: true, json: async () => ({ syncedLyrics: '[00:01.00]old song' }) });   // A answers late
+  await new Promise((r) => setTimeout(r, 10));
+  assert.deepEqual(Ly.linesFor(B), []);                 // B shows nothing of A
+  pending.Beta({ ok: true, json: async () => ({ syncedLyrics: '[00:01.00]new song' }) });
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(Ly.linesFor(B)[0].text, 'new song');
+});
+
+test('the request goes only to LRCLIB, without cookies, referrer, auth header or tokens', async () => {
+  const calls = [];
+  const Ly = createLyrics({ fetchFn: async (url, opts) => { calls.push({ url, opts }); return { ok: false }; } });
+  Ly.linesFor({ id: 'spotify:track:abc', name: 'Song', artists: 'Artist', dur: 180000 });
+  await new Promise((r) => setTimeout(r, 10));
+  for (const c of calls) {
+    const u = new URL(c.url);
+    assert.equal(u.host, 'lrclib.net');
+    assert.deepEqual([...u.searchParams.keys()].sort(), c.url.includes('/get') ? ['artist_name', 'duration', 'track_name'] : ['artist_name', 'track_name']);
+    assert.equal(c.opts.credentials, 'omit'); assert.equal(c.opts.referrerPolicy, 'no-referrer');
+    assert.deepEqual(Object.keys(c.opts.headers), ['Accept']);
+    assert.ok(!/token|bearer|spotify|access/i.test(c.url));
+  }
+});
+
+test('long lines wrap into two balanced rows', () => {
+  const m = (t) => t.length * 10;
+  assert.deepEqual(wrapLine('short', m, 200), ['short']);
+  assert.deepEqual(wrapLine('aaaa bbbb cccc dddd', m, 120), ['aaaa bbbb', 'cccc dddd']);
+});

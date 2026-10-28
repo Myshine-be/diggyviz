@@ -4,6 +4,7 @@
 export default {
   id: "urchin",
   name: "Urchin",
+  lyrics: { y: 0.12, font: "light" },   // under the ball, behind the spike tips
   bloom: 0.35,
   frag: /* glsl */ `
 const float PHI = 1.61803398875;

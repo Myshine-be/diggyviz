@@ -17,6 +17,7 @@ import { createSystemListener, listInputs, permissionGranted } from "./system-au
 import { createFilePlayer } from "./file-player.js";
 import { createDesktopListener, isDesktop } from "./desktop-audio.js";
 import { createLyrics } from "./lyrics.js";
+import { createLyricsLayer } from "./lyrics-layer.js";
 import { audioData, setWave, feedHistory, synthWave, resetAudioData, WAVE_N } from "./audio-data.js";
 
 if (window.__bridge) throw new Error("iOS bridge redirect");
@@ -25,10 +26,12 @@ const $ = (id) => document.getElementById(id);
 const fmt = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
 
 /* ---------------- state ---------------- */
-const track = { id: "", name: "", artists: "", art: "", dur: 210000, prog: 0, playing: false, at: performance.now() };
+const track = { id: "", name: "", artists: "", art: "", dur: 210000, prog: 0, playing: false, approx: false, at: performance.now() };
 let tempo = { bpm: 120, off: 0 };
 let drop = 0;
-const lyrics = createLyrics();   // synced lyrics for Orbit (fetched only while Orbit is on screen)
+const lyrics = createLyrics();   // synced lyrics (fetched only while the lyrics layer is on or Orbit is on screen)
+const lyricsLayer = createLyricsLayer();
+let lyricsOn = store.get("lyrics", true);   // the lyrics layer behind the visuals (⚙ or key L)
 let songsPlayed = store.get("snakeSongs", 0);   // how many songs DiggyViz has seen (Snake grows with them)
 let palCur = clonePal(DEFAULT_PAL), palTarget = clonePal(DEFAULT_PAL);
 let source = null, sourceName = store.get("source", null);
@@ -153,7 +156,7 @@ async function onTrack(t) {
   // same song, richer details (e.g. own music: the cover and tags arrive a moment after the file starts)
   const details = !changed && (t.name !== track.name || t.artists !== track.artists || (t.art || "") !== (track.art || ""));
   const artChanged = changed || (t.art || "") !== (track.art || "");
-  Object.assign(track, { id: t.id, name: t.name, artists: t.artists, art: t.art, dur: t.dur || 210000, prog: t.prog || 0, playing: !!t.playing, at: performance.now() });
+  Object.assign(track, { id: t.id, name: t.name, artists: t.artists, art: t.art, dur: t.dur || 210000, prog: t.prog || 0, playing: !!t.playing, approx: !!t.approx, at: performance.now() });
   if (!changed && !details) return;
 
   $("title").textContent = t.name || "Onbekend nummer";
@@ -276,13 +279,32 @@ function frame(now) {
       // during a rest (pause/break in the song) the visuals slow down to 30 % and breathe; time never jumps
       const pace = 1 - 0.7 * (audio.rest || 0);
       visTime += Math.min(elapsed, 0.25) * pace;
-      engine.render({ sceneDt: document.visibilityState === "visible" && track.playing && !sheetOpen() ? elapsed * pace : 0, bpm: bpmNow, beatPhase: audio.beat, time: visTime, dt, songTime: pos / 1000, audio, pal: palCur, drop, seed: hashStr(track.id || "x") % 1000, sound: audioData, songs: songsPlayed,
-        lyrics: visual?.id === "orbit" && track.id ? { id: track.id, lines: lyrics.linesFor(track), posMs: pos } : null });
+      const ly = lyricsFrame(visual, pos);
+      engine.render({ lyricLayer: ly.layer, sceneDt: document.visibilityState === "visible" && track.playing && !sheetOpen() ? elapsed * pace : 0, bpm: bpmNow, beatPhase: audio.beat, time: visTime, dt, songTime: pos / 1000, audio, pal: palCur, drop, seed: hashStr(track.id || "x") % 1000, sound: audioData, songs: songsPlayed,
+        lyrics: ly.orbit });
     } catch (e) { console.error(e); }
   }
   $("bar").style.width = (track.dur ? (pos / track.dur) * 100 : 0) + "%";
   if (!$("diag").hidden && now - lastDiag > 500) { lastDiag = now; showDiag(inp); }
   requestAnimationFrame(frame);
+}
+
+/* lyrics: the layer behind every visual and Orbit's globe. Lines belong to one track id, so a new song removes
+   the old text at once and a late answer for a previous song is never shown. Timing = lyric timestamps vs. the
+   real playback position; Last.fm only guesses the position (approx), the demo has no real songs → no current line. */
+function lyricsFrame(visual, pos) {
+  const real = track.id && !track.id.startsWith("demo-");
+  const orbit = visual?.id === "orbit";
+  const want = real && !track.approx && (orbit || (lyricsOn && visual?.lyrics !== false));
+  if (!want) return { layer: null, orbit: null };
+  const lines = lyrics.linesFor(track);
+  if (orbit) return { layer: null, orbit: { id: track.id, lines, posMs: pos } };
+  return { orbit: null, layer: lyricsLayer.frame({ lines, sec: pos / 1000, posKnown: !track.approx, id: track.id, style: visual.lyrics }) };
+}
+function setLyrics(on) {
+  lyricsOn = on; store.set("lyrics", on);
+  $("lyricsChk").checked = on;
+  status(on ? "Songteksten aan" : "Songteksten uit");
 }
 
 /* diagnostics (key D): frame time, render size and input, to find where a delay comes from */
@@ -296,6 +318,7 @@ function showDiag(inp) {
     `visual ${e?.currentVisual?.id ?? "–"} · invoer ${inp ? inp.kind : "gesimuleerd"}${inp?.io.inputName ? " (" + inp.io.inputName + ")" : ""}`,
     `invoerlatentie (apparaat) ${inp && Number.isFinite(inp.io.latency) ? Math.round(inp.io.latency * 1000) + " ms" : "onbekend"}`,
     `geluid binnen: ${inp ? (inp.io.receiving ? "ja" : "nee") : "geen echte ingang"} · niveau ${audio.level.toFixed(2)} · kick ${audio.kick.toFixed(2)} · ${Math.round(inp ? inp.io.bpm : tempo.bpm)} BPM`,
+    `songtekst: ${!lyricsOn ? "uit" : !track.id || track.id.startsWith("demo-") ? "geen echt nummer" : { ok: "gevonden", none: "niet gevonden (of niet gesynchroniseerd)", loading: "zoeken…", idle: "–" }[lyrics.stateFor(track.id)]}${track.approx ? " · positie onbekend (Last.fm)" : ""}`,
     `app: ${isDesktop() ? "Windows-app " + (window.diggyDesktop?.version || "") + (deskIn.active ? " · systeemgeluid aan" : deskIn.starting ? " · systeemgeluid start…" : " · systeemgeluid UIT") : "browser"} · DiggyViz ${CONFIG.VERSION}`,
     "Totale vertraging tot het beeld is niet gemeten.",
   ].join("\n");
@@ -370,6 +393,8 @@ if (!isDesktop() && listener.supported && store.get("listen", false)) {
   }, true);
 }
 $("autoChk").addEventListener("change", (e) => setAuto(e.target.checked));
+$("lyricsChk").checked = lyricsOn;
+$("lyricsChk").addEventListener("change", (e) => setLyrics(e.target.checked));
 
 /* own music (like a PSP): DiggyViz plays the files and analyses the same sound */
 function showPlayer() {
@@ -539,6 +564,7 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "h") app.classList.toggle("idle");
   else if (e.key === "f" && canFs) $("fsBtn").click();
   else if (e.key === "d") $("diag").hidden = !$("diag").hidden;
+  else if (e.key === "l") setLyrics(!lyricsOn);
 });
 
 let wakeLock = null;
@@ -600,4 +626,4 @@ $("version").textContent = "DiggyViz " + CONFIG.VERSION;
 })();
 
 // test/debug hook
-window.diggy = { player, tabIn, sysIn, deskIn, startDesktopAudio, get soundInput() { return soundInput()?.kind ?? null; }, setVisual, stepVisual, get engine() { return engine; }, onTrack, useSource, audio, setListen, setSys, setTab, get listening() { return listener.active; }, get tempo() { return { ...tempo, auto: tempoAuto }; } };
+window.diggy = { lyrics, setLyrics, player, tabIn, sysIn, deskIn, startDesktopAudio, get soundInput() { return soundInput()?.kind ?? null; }, setVisual, stepVisual, get engine() { return engine; }, onTrack, useSource, audio, setListen, setSys, setTab, get listening() { return listener.active; }, get tempo() { return { ...tempo, auto: tempoAuto }; } };

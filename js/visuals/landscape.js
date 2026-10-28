@@ -8,6 +8,7 @@ import { SPECTRUM_HISTORY } from "./spectrum-history.js";
 export default {
   id: "landscape",
   name: "Dunes",
+  lyrics: { y: 0.8, font: "serif", occlude: false, ink: [0.97, 0.91, 0.8] },   // in the desert sky, never on the dunes
   bloom: 0.7,
   frag: /* glsl */ `
 ${SPECTRUM_HISTORY}

@@ -1,18 +1,26 @@
-// Time-synced song lyrics for the Orbit visual, from LRCLIB (lrclib.net, a free open lyrics database).
-// Only artist, title, album and duration are sent — never Spotify tokens; no cookies, no referrer.
-// Lyrics are only fetched while Orbit is on screen, kept in memory, never stored or uploaded.
-// Not every song has synced lyrics: then Orbit simply shows its rings.
+// Time-synced song lyrics (the lyrics layer behind every visual, and Orbit's globe), from LRCLIB (lrclib.net, a free
+// open lyrics database). Only artist, title and duration are sent — never Spotify tokens; no cookies, no referrer.
+// Lyrics are only fetched while the layer is on or Orbit is on screen, kept in memory, never stored or uploaded.
+// Not every song has synced lyrics: then the layer stays empty and Orbit shows its rings.
 
-/** "[01:23.45] text" lines → [{ t: seconds, text }], sorted. Pure (tested). */
+const stampSec = (m, s, f) => Number(m) * 60 + Number(s) + (f ? Number(f) / Math.pow(10, f.length) : 0);
+
+/** "[01:23.45] text" lines → [{ t: seconds, text, words? }], sorted. Pure (tested).
+ *  Enhanced LRC ("<01:23.45>word <01:24.10>word") keeps its REAL word times in `words` — only then a line may be
+ *  highlighted word by word. Without word stamps there is no word timing: we never invent it. */
 export function parseLRC(lrc) {
   const out = [];
   for (const raw of String(lrc || "").split(/\r?\n/)) {
     const stamps = [...raw.matchAll(/\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]/g)];
     if (!stamps.length) continue;
-    const text = raw.replace(/\[[^\]]*\]/g, "").trim();
+    const body = raw.replace(/\[[^\]]*\]/g, "");
+    const wm = [...body.matchAll(/<(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?>([^<]*)/g)];
+    const words = wm.length ? wm.map((m) => ({ t: stampSec(m[1], m[2], m[3]), text: m[4] })).filter((w) => w.text.trim()) : null;
+    const text = body.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
     for (const m of stamps) {
-      const frac = m[3] ? Number(m[3]) / Math.pow(10, m[3].length) : 0;
-      out.push({ t: Number(m[1]) * 60 + Number(m[2]) + frac, text });
+      const line = { t: stampSec(m[1], m[2], m[3]), text };
+      if (words?.length && stamps.length === 1) line.words = words.map((w) => ({ t: w.t, text: w.text.trim() }));
+      out.push(line);
     }
   }
   return out.sort((a, b) => a.t - b.t);
@@ -25,7 +33,40 @@ export function lineAt(lines, sec) {
   return ans;
 }
 
-const cleanTitle = (s) => String(s || "").replace(/\s*[-–]\s*(remaster(ed)?|live|radio edit|mono|stereo).*$/i, "").replace(/\s*\((feat|ft|with)\.?[^)]*\)/i, "").trim();
+export const GLIDE_SEC = 0.45;
+const ease = (x) => x * x * (3 - 2 * x);
+
+/**
+ * What the lyrics layer shows at `sec` (song position from the player, never from BPM or kicks). Pure (tested).
+ * → null when nothing may be shown (no synced lines, position unknown), else
+ *   { show: [line indices to draw, in order, non-empty only], cur: position of the current line in `show` or -1,
+ *     at: position in `show` the layout is centred on, glide: 0..1 (eased slide from the previous line),
+ *     emph: 0..1 (how strongly the current line is highlighted), word: index of the sung word or -1 }
+ * The slide only happens on a normal step to the next line; after a seek, a pause or a gap the layout is simply
+ * correct at once (glide 1), so nothing jumps or flashes.
+ */
+export function lyricView(lines, sec, posKnown = true) {
+  if (!lines?.length || !posKnown || !Number.isFinite(sec)) return null;
+  const show = [];
+  for (let i = 0; i < lines.length; i++) if (lines[i].text) show.push(i);
+  if (!show.length) return null;
+  const idx = lineAt(lines, sec);
+  const nextShow = (i) => { let lo = 0; while (lo < show.length && show[lo] <= i) lo++; return lo; };   // first shown line after i
+  if (idx < 0 || !lines[idx].text) {                    // before the first line or in an instrumental gap: no current line
+    const at = Math.min(show.length - 1, nextShow(idx));
+    return { show, cur: -1, at, glide: 1, emph: 0, word: -1 };
+  }
+  const at = show.indexOf(idx);
+  const since = Math.max(0, sec - lines[idx].t);
+  const p = ease(Math.min(1, since / GLIDE_SEC));
+  const stepped = idx > 0 && !!lines[idx - 1].text;      // came straight from the previous sung line
+  let word = -1;
+  const w = lines[idx].words;
+  if (w) for (let k = 0; k < w.length; k++) if (w[k].t <= sec) word = k;
+  return { show, cur: at, at, glide: stepped ? p : 1, emph: stepped ? 1 : p, word };
+}
+
+const cleanTitle =(s) => String(s || "").replace(/\s*[-–]\s*(remaster(ed)?|live|radio edit|mono|stereo).*$/i, "").replace(/\s*\((feat|ft|with)\.?[^)]*\)/i, "").trim();
 const firstArtist = (s) => String(s || "").split(/,|&| feat\.? | ft\.? /i)[0].trim();
 
 export function createLyrics({ fetchFn = (...a) => fetch(...a), base = "https://lrclib.net/api" } = {}) {

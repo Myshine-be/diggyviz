@@ -25,6 +25,7 @@ function boardState(gl, cols, rows) {
 
 export default {
   id: "nightdrive", name: "Snake", story: true, duration: 120, bloom: 0.3,
+  lyrics: { y: 0.5, font: "mono" },      // behind the board: the dark cells keep it readable, the snake passes over it
 
   uniforms({ gl, loc, frame, slot, width, height }) {
     const cols = width >= height ? 28 : 16;
