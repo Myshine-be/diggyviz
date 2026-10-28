@@ -50,7 +50,7 @@ Lees ook `AGENTS.md`, met de secties "Windows app (2.7)" en "Clean screen (2.7)"
 1. **Echte Windows-loopback op Mo's laptop.** Starten → Spotify-app spelen → BPM LIVE en D-overlay. Dit is de belangrijkste test.
    - Vraagt Chrome/Electron op Windows toch iets, of blijft het geluid stil: kijk eerst naar `setDisplayMediaRequestHandler` (sources[0] = scherm) en of `audio: 'loopback'` een audiospoor geeft.
    - Debug met `DIGGYVIZ_DEBUG=1` vanaf de commandline.
-2. **Installer.** De Windows-installer werd hier niet gebouwd: NSIS heeft wine nodig. Mo kreeg een zip met de uitgepakte app (DiggyViz.exe). Een echte Setup komt uit de workflow (tag `desktop-v0.1.0` is gepusht). Controleer of die run slaagde.
+2. **Installer.** De Windows-installer werd hier niet gebouwd: NSIS heeft wine nodig. Mo kreeg een zip met de uitgepakte app (DiggyViz.exe). Een echte Setup komt uit de workflow `.github/workflows/desktop.yml`. Het pushen van een tag lukte vanuit Claudes omgeving niet: start de workflow met de hand (GitHub → Actions → "Desktop app (Windows)" → Run workflow) of push tag `desktop-v0.1.0`, en controleer of de run slaagt.
 3. **Ondertekening.** De app is niet ondertekend, dus SmartScreen vraagt "Toch uitvoeren". Ondertekenen kan later.
 4. **Mac-versie.** Electron kan systeemgeluid op macOS 14.2+ (CoreAudio Tap, NSAudioCaptureUsageDescription). Nog niet gedaan.
 5. **Android-app.** Volgende stap volgens Mo: AudioPlaybackCapture (MediaProjection, Android 10+).
