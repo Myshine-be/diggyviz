@@ -12,5 +12,5 @@ export const CONFIG = {
   AUTO_SWITCH_SECONDS: 180,   // calm: a visual gets time to grow on you
   CROSSFADE_SECONDS: 3,
 
-  VERSION: "2.9.0",
+  VERSION: "2.9.1",
 };

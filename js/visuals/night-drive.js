@@ -24,7 +24,7 @@ function boardState(gl, cols, rows) {
 }
 
 export default {
-  id: "nightdrive", name: "Snake", story: true, duration: 120, bloom: 0.6,
+  id: "nightdrive", name: "Snake", story: true, duration: 120, bloom: 0.3,
 
   uniforms({ gl, loc, frame, slot, width, height }) {
     const cols = width >= height ? 28 : 16;
@@ -136,13 +136,13 @@ void main() {
     float f = clamp((k - 1.0) / max(uLen - 1.0, 1.0), 0.0, 1.0);
     float lv = level(k);
     vec3 sc = pal(0.3 + 0.62 * f);
-    vec3 seg = sc * (0.3 + 1.05 * lv);
+    vec3 seg = sc * (0.28 + 0.55 * lv);                    // calm: colour, never white-hot
     // LED meter inside each segment: a bar that fills with the level
     // three LED dots across the segment light up with the level (like a tiny VU meter)
     float leds = 0.0;
     for (int j = 0; j < 3; j++) { float on = step(float(j) / 3.0 + 0.08, lv); leds += on * (1.0 - smoothstep(0.0, aa * 1.5, length(lp - vec2(0.0, (float(j) - 1.0) * 0.14)) - 0.045)); }
-    seg += mix(sc, vec3(1.0), 0.55) * leds * 0.8 * step(0.5, bk);
-    seg += vec3(1.0) * 0.12 * (1.0 - smoothstep(-0.1, 0.0, bodyAll));     // soft inner highlight
+    seg += mix(sc, vec3(1.0), 0.35) * leds * 0.45 * step(0.5, bk);
+    seg += vec3(1.0) * 0.05 * (1.0 - smoothstep(-0.1, 0.0, bodyAll));     // soft inner highlight
     col = mix(col, seg, m);
   }
   col += pal(0.4) * exp(-max(bodyAll, 0.0) * 18.0 / max(CS * 40.0, 0.5)) * 0.0;
@@ -164,7 +164,7 @@ void main() {
   if (hm > 0.0 || length(hp) < 1.2) {
     vec2 dir = uHead.xy - uHead.zw; dir = length(dir) > 0.0 ? normalize(dir) : vec2(1.0, 0.0);
     vec2 side = vec2(-dir.y, dir.x);
-    vec3 hc = pal(0.3) * 1.15;
+    vec3 hc = pal(0.3) * 0.8;
     col = mix(col, hc, hm);
     col += vec3(1.0) * 0.15 * hm * (1.0 - smoothstep(-0.1, 0.25, dot(hp, vec2(0.6, -0.8))));
     vec2 look = dir * 0.05 + side * 0.06 * sin(uTime * 1.5) * uRest;
