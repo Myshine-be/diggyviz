@@ -77,7 +77,7 @@ try {
   ({ sessionId: session } = await send('Target.attachToTarget', { targetId, flatten: true }, null));
   await send('Page.enable'); await send('Runtime.enable'); await send('Log.enable');
   await send('Network.enable');
-  await send('Network.setBlockedURLs', { urls: ['https://fonts.googleapis.com/*', 'https://fonts.gstatic.com/*', 'https://api.deezer.com/*'] });
+  await send('Network.setBlockedURLs', { urls: ['https://fonts.googleapis.com/*', 'https://fonts.gstatic.com/*', 'https://api.deezer.com/*', 'https://lrclib.net/*'] });
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   // Deterministic frames: UI and all production shaders still run unmodified.
   await send('Page.addScriptToEvaluateOnNewDocument', { source: `
@@ -109,7 +109,7 @@ try {
         window.__step(1/60);const again=new Uint8Array(e.W*e.H*4);gl.readPixels(0,0,e.W,e.H,gl.RGBA,gl.UNSIGNED_BYTE,again);let next=0;for(let i=0;i<again.length;i+=4)if(again[i]+again[i+1]+again[i+2]>30)next++;
         debug={uniforms,sample:Array.from(sample),next};
       }
-      return {debug,id:e.currentVisual.id,compiled:!!e.programs.get(${JSON.stringify(id)}),glError:gl.getError(),litPixels:lit,queuedFrames:window.__frames.length,lost:gl.isContextLost(),size:[e.W,e.H],drawSize:[gl.drawingBufferWidth,gl.drawingBufferHeight],defaultFramebuffer:gl.getParameter(gl.FRAMEBUFFER_BINDING)===null};
+      return {debug,status:document.querySelector("#status")?.textContent,id:e.currentVisual.id,compiled:!!e.programs.get(${JSON.stringify(id)}),glError:gl.getError(),litPixels:lit,queuedFrames:window.__frames.length,lost:gl.isContextLost(),size:[e.W,e.H],drawSize:[gl.drawingBufferWidth,gl.drawingBufferHeight],defaultFramebuffer:gl.getParameter(gl.FRAMEBUFFER_BINDING)===null};
     })()`);
     assert.ok(result.compiled && result.glError === 0 && result.litPixels > 100, JSON.stringify(result));
     results.push(result); await new Promise(r => setTimeout(r, 300)); await screenshot(id);

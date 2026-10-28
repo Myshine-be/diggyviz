@@ -66,7 +66,7 @@ void main() {
       col=sand*(.28+.72*dif*(.40+.60*shadow)+detail);
       col+=vec3(.12,.065,.025)*pow(max(n.y,0.0),8.0);
       // Immediate, localized loose sand on a nearby crest, separate from the slow memory of dunes.
-      float dust=exp(-pow((h-.55)*13.0,2))*exp(-pow((t-5.0)*.45,2));
+      float dust=exp(-pow((h-.55)*13.0,2.0))*exp(-pow((t-5.0)*.45,2.0));
       float gust=noise2(q.xz*12.0+vec2(uTime*1.5,0));
       col+=sand*dust*gust*(uKick*.20+histSmooth(.85,0.0)*.08);
       float fog=1.0-exp(-t*t*.0026);

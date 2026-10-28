@@ -1,0 +1,41 @@
+name: 3.0 moving visual previews
+on:
+  pull_request:
+    branches: [main]
+    paths: ['js/**', 'tests/previews.mjs', 'tests/prepare-preview.mjs', '.github/workflows/visual-previews.yml']
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Audio and video tools (QA only)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Real music analysis fixture
+        run: node tests/prepare-preview.mjs
+      - name: Render production shaders with real music measurements
+        run: node tests/previews.mjs
+      - name: Encode previews
+        if: always()
+        run: |
+          for dir in test-results/previews/*/; do
+            [ -f "$dir/0000.png" ] || continue
+            ffmpeg -v error -y -framerate 24 -i "$dir/%04d.png" -i test-results/previews/audio.wav -c:v libx264 -pix_fmt yuv420p -crf 19 -c:a aac -shortest -movflags +faststart "${dir%/}.mp4"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: moving-previews
+          path: |
+            test-results/previews/*.mp4
+            test-results/previews/CREDITS.txt
+            test-results/previews/report.json
+            test-results/lyrics-live-probe.json
+            test-results/previews/*/0000.png
+            test-results/previews/*/0096.png
+            test-results/previews/*/0240.png

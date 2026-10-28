@@ -20,6 +20,7 @@ float inkField(vec3 p) {
   for(int i=0;i<7;i++) {
     float fi=float(i),fq=(fi+.5)/7.0;
     vec3 q=p-uInk[i].xyz;
+    q+=sin(q.yzx*9.0+vec3(fi,uTime*.12,fi*2.0))*sin(q.zxy*6.0+fi)*(.022+.022*band(fq));
     float selected=1.0-step(.5,abs(fi-mod(uKickN,7.0)));
     float strike=selected*uKick;
     float stretch=1.0+band(fq)*.35+strike*.75;

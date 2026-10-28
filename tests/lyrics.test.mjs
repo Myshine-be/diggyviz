@@ -119,3 +119,14 @@ test('long lines wrap into two balanced rows', () => {
   assert.deepEqual(wrapLine('short', m, 200), ['short']);
   assert.deepEqual(wrapLine('aaaa bbbb cccc dddd', m, 120), ['aaaa bbbb', 'cccc dddd']);
 });
+
+test('canvas layer settles immediately when seeking to a line boundary or pausing mid-transition', async()=>{
+ const {createLyricsLayer}=await import('../js/lyrics-layer.js');
+ const ctx={clearRect(){},measureText(t){return {width:t.length*20};},fillText(){}};
+ const doc={createElement(){return {getContext(){return ctx;}};}};
+ const layer=createLyricsLayer({doc});
+ const frame=(sec,playing=true,id='a')=>layer.frame({lines:L3,sec,playing,id,posKnown:true});
+ frame(4.99);assert.ok(frame(5.02).glide<1);assert.equal(frame(5.03,false).glide,1);
+ frame(2);assert.equal(frame(5.01).glide,1); // seek landing just after the timestamp
+ assert.equal(frame(5.02,true,'new-track').glide,1);
+});
