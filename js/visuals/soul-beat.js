@@ -1,111 +1,80 @@
-// Soul Beat — tribute to the old Pioneer DJ visuals: a glowing white moon-disc with a dark
-// living ferrofluid (six melting metaballs) that splits droplets on kicks, grows spikes on high notes and drips. Track title is shown
-// above it in spaced lowercase (caption).
-
+// Ink suspended in glass. Independent Chrome-inspired Lissajous paths; no centre spring or shared centroid.
+const centres=new Float32Array(28);
 export default {
-  id: "soulbeat",
-  name: "Soul Beat",
-  lyrics: { y: 0.11, font: "light" },
-  bloom: 0.22,
-  caption: true,
+  id:"soulbeat", name:"Soul Beat", caption:true, bloom:0.18, grade:0.25,
+  lyrics:{y:{land:0.12,port:0.15},font:"light"},
+  uniforms({gl,loc,frame}) {
+    const a=frame.audio,t=frame.time*.24;
+    for(let i=0;i<7;i++) {
+      const x=Math.sin(t*(.7+i*.13)+i*1.9),y=Math.cos(t*(.6+i*.11)+i*2.7),z=Math.sin(t*(.5+i*.17)+i*.8);
+      const length=Math.hypot(x,y,z)||1, r=.38+.22*(.5+.5*Math.sin(t*.31+i*1.7));
+      const level=a.bands?.[Math.round(i/7*31)]||0, onset=a.flux?.[Math.round(i/7*31)]||0;
+      centres.set([x/length*r,y/length*r,z/length*r,.125+.055*level+.035*onset],i*4);
+    }
+    if(loc.uInk)gl.uniform4fv(loc.uInk,centres);
+  },
   frag: /* glsl */ `
-// A living ferrofluid: six metaballs drift around each other on slow, never-repeating paths and melt together.
-// Lows give mass (they swell and merge), highs grow fine spikes along the edge in their own direction around the
-// blob, a kick throws a droplet off that floats back, a snare ripples the skin, new notes (flux) shoot spikes.
-float fluidBall(int k, out vec2 c) {
-  float fk = float(k), t = uSongTime * 0.21 + uTime * 0.035;
-  float a = fk * 1.047 + t * (0.6 + 0.13 * fk) + 0.7 * sin(t * 0.37 + fk * 2.1);
-  float r = 0.05 + 0.085 * (0.5 + 0.5 * sin(t * 0.53 + fk * 1.7)) + 0.04 * histSmooth(0.3 + 0.1 * fk, 0.05);
-  c = vec2(cos(a), sin(a) * 0.82) * r + vec2(0.0, 0.035);
-  float low = histSmooth(0.03 + 0.03 * fk, 0.0);
-  return 0.04 + 0.034 * low + 0.008 * sin(t * 1.3 + fk);
-}
-
-float blobSDF(vec2 q, out float ang) {
-  vec2 c; float d = 1e3; vec2 mass = vec2(0.0);
-  for (int k = 0; k < 6; k++) {
-    float r = fluidBall(k, c);
-    d = smin(d, length(q - c) - r, 0.075);
-    mass += c;
+uniform vec4 uInk[7];
+float inkField(vec3 p) {
+  float d=10.0;
+  for(int i=0;i<7;i++) {
+    float fi=float(i),fq=(fi+.5)/7.0;
+    vec3 q=p-uInk[i].xyz;
+    float selected=1.0-step(.5,abs(fi-mod(uKickN,7.0)));
+    float strike=selected*uKick;
+    float stretch=1.0+band(fq)*.35+strike*.75;
+    q.xy=rot(fi*1.7+uTime*.065)*q.xy;
+    vec3 axes=vec3(.87/stretch,stretch,1.0);
+    float blob=(length(q/axes)-uInk[i].w)*min(axes.x,1.0);
+    // Soft corrugations follow local pitch; no ferrofluid needles or metallic centre.
+    blob+=sin(q.x*25.0+fi)*sin(q.y*21.0-fi)*sin(q.z*19.0)*(.002+.012*flux(fq));
+    d=smin(d,blob,.065);
+    float sn=1.0-step(.5,abs(fi-mod(uSnareN+3.0,7.0)));
+    // A daughter droplet separates next to THIS mass, never a collective centroid.
+    vec3 dir=normalize(vec3(sin(fi*2.1),cos(fi*1.3),.35));
+    vec3 dc=uInk[i].xyz+dir*(uInk[i].w+.025+sn*uSnare*.15);
+    d=smin(d,length(p-dc)-(.027+.016*sn*uSnare),.025);
   }
-  mass /= 6.0;
-  vec2 rel = q - mass;
-  ang = atan(rel.y, rel.x);
-  // highs: ferrofluid spikes; every direction listens to its own pitch (around the blob = low → high → low)
-  float fa = 0.35 + 0.6 * abs(fract(ang / TAU + 0.5) * 2.0 - 1.0);
-  float hi = histSmooth(fa, 0.0) * 0.8 + flux(fa) * 0.9;
-  float rot = uSongTime * 0.12;
-  float sp = pow(abs(sin(ang * 13.0 + rot)), 14.0) + 0.7 * pow(abs(sin(ang * 21.0 - rot * 1.3)), 22.0);
-  float near = 1.0 - smoothstep(-0.01, 0.035, d);
-  d -= sp * (0.004 + 0.034 * hi + 0.01 * uDrop) * near;
-  // snare: a ripple runs over the skin
-  d += sin(length(rel) * 140.0 - uTime * 18.0) * 0.0025 * uSnare * near;
-  // kick: a droplet splits off in a new direction every kick and floats back as the kick fades
-  float ka = hash12(vec2(uKickN, 4.1)) * TAU;
-  float out_ = 0.16 * sqrt(clamp(uKick, 0.0, 1.0));
-  vec2 dc = mass + vec2(cos(ka), sin(ka)) * (0.07 + out_);
-  d = smin(d, length(q - dc) - (0.012 + 0.016 * uKick), 0.035 + 0.04 * (1.0 - uKick));
-  // a second, smaller droplet on snares, opposite side
-  float sa = hash12(vec2(uSnareN, 8.3)) * TAU;
-  vec2 sc = mass + vec2(cos(sa), sin(sa)) * (0.075 + 0.1 * sqrt(clamp(uSnare, 0.0, 1.0)));
-  d = smin(d, length(q - sc) - 0.009 * (0.4 + uSnare), 0.03);
-
-  d += (noise2(q * 90.0 + uTime * 0.6) - 0.5) * 0.003;            // soft fuzzy edge
-  return d;
+  return max(d,length(p)-.89);
 }
-
+vec3 inkNormal(vec3 p) {
+  vec2 e=vec2(.002,-.002);
+  return normalize(e.xyy*inkField(p+e.xyy)+e.yyx*inkField(p+e.yyx)+e.yxy*inkField(p+e.yxy)+e.xxx*inkField(p+e.xxx));
+}
 void main() {
-  vec2 p = P();
-  vec2 c = vec2(0.0, -0.03);
-  float R = 0.37;
-  vec2 q = p - c;
-  float r = length(q);
-  float px = 1.5 / min(uRes.x, uRes.y);
-
-  // backdrop: warm grey studio wall
-  vec3 wall = vec3(0.24, 0.24, 0.235) * (1.0 - dot(p, p) * 0.35);
-  wall = mix(wall, wall * (0.8 + 0.4 * uPal[1]), 0.2);
-  float halo = exp(-max(r - R, 0.0) * 34.0);
-  vec3 col = wall + vec3(1.0, 0.95, 0.72) * halo * (0.5 + 0.2 * uEnergy);
-
-  // the moon-disc
-  float disc = 1.0 - smoothstep(R - px, R + px, r);
-  vec3 light = mix(vec3(1.25, 1.25, 1.18), vec3(1.02, 1.03, 0.94), smoothstep(0.0, R, r));
-  light += 0.025 * sin(r * 160.0 - uTime * 0.5);
-  float floorY = -0.22;
-  light = mix(light, vec3(1.0), (1.0 - smoothstep(floorY - 0.004, floorY + 0.004, q.y)) * 0.45);
-  light = mix(light, light * (0.92 + 0.12 * uPal[2]), 0.35);
-
-  // blob
-  float ang;
-  float d = blobSDF(q, ang);
-  float body = 1.0 - smoothstep(-px, px, d);
-  // glossy liquid: a soft rim, a moving specular sheen from the top-left light, a hint of the cover colour
-  vec2 g = vec2(dFdx(d), dFdy(d)); vec2 nrm = normalize(g + 1e-6);
-  float rim = smoothstep(-0.045, 0.0, d);
-  float spec = pow(max(dot(nrm, normalize(vec2(-0.6, 0.8))), 0.0), 6.0) * rim;
-  float swirl = noise2(q * 7.0 + vec2(uTime * 0.12, -uTime * 0.08));
-  vec3 ink = vec3(0.025, 0.025, 0.03) + uPal[0] * 0.25;
-  ink += mix(uPal[1], vec3(1.0), 0.35) * (0.10 * rim + 0.22 * spec) * (0.7 + 0.6 * swirl);
-  vec3 inner = mix(light, ink, body);
-  // contact shadow under the blob
-  inner *= 1.0 - 0.18 * exp(-max(d, 0.0) * 30.0) * (1.0 - body);
-
-  // drips falling to the floor
-  for (int i = 0; i < 18; i++) {
-    float fi = float(i);
-    float h1 = hash12(vec2(fi, 3.7)), h2 = hash12(vec2(fi, 9.1));
-    float speed = 0.05 + h2 * 0.08;
-    float life = fract(uSongTime * speed + h1);
-    vec2 start = vec2((h1 - 0.5) * 0.3, -0.05 + h2 * 0.04);
-    vec2 pos = start + vec2(sin(fi * 7.0 + life * 3.0) * 0.01, -life * life * 0.24);
-    pos.y = max(pos.y, floorY + 0.002);
-    float size = (0.0018 + h2 * 0.004) * (1.0 + uKick * 0.6);
-    float dot_ = 1.0 - smoothstep(size - px, size + px, length(q - pos));
-    inner = mix(inner, vec3(0.12), dot_ * 0.85);
+  vec2 p=P()-vec2(0,-.025),q=p/.375;
+  float r=length(q),px=1.5/min(uRes.x,uRes.y)/.375;
+  vec3 col=uPal[0]*.25+pal(.45)*.018;
+  if(r<1.0+px) {
+    float front=sqrt(max(0.0,1.0-r*r));
+    vec3 glass=mix(vec3(.22,.25,.25),vec3(.52,.55,.51),smoothstep(-1.0,1.0,q.y));
+    glass=mix(glass,glass*(.5+pal(.55)),.18);
+    // Very mild refraction; the masses remain spread throughout the bowl.
+    vec3 ro=vec3(q*(1.0-.035*front),front),rd=vec3(0,0,-1);
+    float t=.015;bool hit=false;float d=1.0;
+    for(int i=0;i<72;i++) {
+      d=inkField(ro+rd*t);
+      if(d<.0018){hit=true;break;}
+      t+=max(.003,d*.67);
+      if(t>2.0*front)break;
+    }
+    if(hit) {
+      vec3 pos=ro+rd*t,n=inkNormal(pos);
+      float dif=max(dot(n,normalize(vec3(-.5,.8,1.0))),0.0);
+      float rim=pow(1.0-max(n.z,0.0),2.0);
+      vec3 ink=vec3(.012,.017,.022)+uPal[0]*.2;
+      ink+=pal(.55)*(.028*dif+.12*rim);
+      // Restrained translucent edges, no bright chrome highlights.
+      glass=mix(glass,ink,.94-.18*rim);
+    }
+    float edge=pow(1.0-front,5.0);
+    glass=mix(glass,uPal[1]*.35+vec3(.16),edge*.35);
+    vec3 nGlass=vec3(q,front);
+    float softbox=pow(max(dot(nGlass,normalize(vec3(-.55,.65,.6))),0.0),75.0);
+    glass+=vec3(.18,.19,.18)*softbox;
+    col=mix(col,glass,1.0-smoothstep(1.0-px,1.0+px,r));
   }
-
-  col = mix(col, inner, disc);
-  fragColor = vec4(col, 1.0);
+  col+=pal(.6)*exp(-abs(r-1.0)*160.0)*.08;
+  fragColor=vec4(col,1);
 }`,
 };

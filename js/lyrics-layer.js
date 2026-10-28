@@ -36,7 +36,7 @@ export function wrapLine(text, measure, maxW) {
 export function createLyricsLayer({ doc = typeof document !== "undefined" ? document : null } = {}) {
   const canvas = doc ? (typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(ATLAS_W, ATLAS_H) : Object.assign(doc.createElement("canvas"), { width: ATLAS_W, height: ATLAS_H })) : null;
   const ctx = canvas?.getContext("2d");
-  let key = "", version = 0, fontsReady = 0;
+  let key = "", version = 0, fontsReady = 0, previous = null, slide = false;
   const wordEnds = [];                                  // x end (0..1 of the slot) of each word of the current line
   let textStart = 0;
 
@@ -68,7 +68,7 @@ export function createLyricsLayer({ doc = typeof document !== "undefined" ? docu
         const widest = Math.max(...rows.map((r) => ctx.measureText(r).width));
         if (widest > maxW) { size = Math.max(22, Math.floor(size * maxW / widest)); ctx.font = font(size); }
         const cy = j * SLOT_H + SLOT_H / 2, lh = size * 1.08;
-        rows.forEach((r, i) => ctx.fillText(r, col * COL + COL / 2, cy + (i - (rows.length - 1) / 2) * lh));
+        rows.forEach((r, i) => ctx.fillText(r, col * COL + COL / 2, cy + (i - (rows.length - 1) / 2) * lh, maxW));
         // real word timestamps only: remember where each word of the current (single-row) line ends
         if (col === 1 && j === CENTER && line.words && rows.length === 1) {
           const full = ctx.measureText(rows[0]).width;
@@ -88,10 +88,16 @@ export function createLyricsLayer({ doc = typeof document !== "undefined" ? docu
      * lines: parsed lines of THIS track (empty while loading / none), sec: playback position, posKnown: the
      * source gives a real position, id: track id, style: the visual's lyric style.
      */
-    frame({ lines, sec, posKnown, id, style }) {
+    frame({ lines, sec, posKnown, id, style, playing = true }) {
       if (!ctx) return null;
       const view = lyricView(lines, sec, posKnown);
-      if (!view) return null;
+      if (!view) { previous = null; slide = false; return null; }
+      const delta = previous ? sec - previous.sec : Infinity;
+      const seek = !previous || previous.id !== id || delta < -0.02 || delta > 0.6;
+      if (seek || !playing) slide = false;
+      else if (previous.at !== view.at) slide = view.at === previous.at + 1 && view.cur >= 0;
+      if (!slide) { view.glide = 1; if (view.cur >= 0) view.emph = 1; }
+      previous = { id, sec, at: view.at };
       const st = { ...DEFAULT_LYRIC_STYLE, ...(style || {}) };
       const k = `${id}|${view.at}|${st.font}|${fontsReady}`;
       if (k !== key) { key = k; draw(lines, view, st); }

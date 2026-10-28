@@ -5,6 +5,7 @@
 import { SPECTRUM_HISTORY } from "./spectrum-history.js";
 
 export default {
+  lyrics: { y: 0.82, font: "light" },
   id: "vanish",
   name: "Vanish",
   bloom: 0.85,

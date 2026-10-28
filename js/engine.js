@@ -337,7 +337,7 @@ export class Engine {
   }
 
   #free(t) { if (!t) return; this.gl.deleteFramebuffer(t.fb); this.gl.deleteTexture(t.tex); }
-  #freeSlot(s) { s.t.forEach((t) => this.#free(t)); }
+  #freeSlot(s, targetsOnly = false) { s.t.forEach((t) => this.#free(t)); if (!targetsOnly && s.vis.dispose) s.vis.dispose(this.gl, s); }
 
   #resize(force = false) {
     const dpr = Math.min(3, window.devicePixelRatio || 1);
@@ -356,7 +356,7 @@ export class Engine {
       const previous = s.t[s.i];
       const targets = (s.frozen || !s.vis.feedback) ? [this.#target(RW, RH)] : [this.#target(RW, RH), this.#target(RW, RH)];
       targets.forEach((target) => this.#copy(previous, target));
-      this.#freeSlot(s); s.t = targets; s.i = 0;
+      this.#freeSlot(s, true); s.t = targets; s.i = 0;
     }
   }
 

@@ -299,7 +299,7 @@ function lyricsFrame(visual, pos) {
   if (!want) return { layer: null, orbit: null };
   const lines = lyrics.linesFor(track);
   if (orbit) return { layer: null, orbit: { id: track.id, lines, posMs: pos } };
-  return { orbit: null, layer: lyricsLayer.frame({ lines, sec: pos / 1000, posKnown: !track.approx, id: track.id, style: visual.lyrics }) };
+  return { orbit: null, layer: lyricsLayer.frame({ lines, sec: pos / 1000, posKnown: !track.approx, id: track.id, style: visual.lyrics, playing: track.playing }) };
 }
 function setLyrics(on) {
   lyricsOn = on; store.set("lyrics", on);
