@@ -317,6 +317,37 @@ try {
     assert.equal(stats.glError,0);assert.ok(stats.litFraction>0);hits.push(stats);await screenshot('hit-'+id+'-'+state);
   }
   results.push({test:'12 visuals at rest, kick and snare',hits});
+  // Actual canvas atlas -> GPU final pass, including all per-visual placements and sky clipping.
+  const lyricChecks=await evaluate(`(async()=>{
+    const {createLyricsLayer}=await import('./js/lyrics-layer.js');
+    const layer=createLyricsLayer(),e=diggy.engine,gl=e.gl,checks=[];
+    const lines=[{t:0,text:'Een rustige eerste zin'},{t:2,text:'Deze zin wordt nu gezongen'},{t:5,text:'Daarna klinkt de volgende regel'}];
+    const a={bands:new Float32Array(32),peaks:new Float32Array(32),flux:new Float32Array(32),kick:0,snare:0,hat:0,energy:0,level:0,beat:0,rest:0};
+    const frame={time:1,dt:0,sceneDt:0,songTime:2.1,bpm:120,audio:a,pal:{dark:[2,4,8],mid:[30,220,130],hi:[140,250,220],hot:[245,60,160]},drop:0,seed:11};
+    for(const v of e.visuals.filter(v=>v.lyrics!==false)) {
+      e.setVisual(v.id,{instant:true});e.render(frame);
+      const before=new Uint8Array(e.W*e.H*4);gl.readPixels(0,0,e.W,e.H,gl.RGBA,gl.UNSIGNED_BYTE,before);
+      const ly=layer.frame({id:v.id,lines,sec:2.1,posKnown:true,style:v.lyrics});
+      e.lyrVis=v.id;e.lyrOn=1;e.render({...frame,lyricLayer:ly});
+      const after=new Uint8Array(before.length);gl.readPixels(0,0,e.W,e.H,gl.RGBA,gl.UNSIGNED_BYTE,after);
+      let changed=0,belowSky=0;
+      for(let i=0;i<before.length;i+=4){const delta=Math.abs(before[i]-after[i])+Math.abs(before[i+1]-after[i+1])+Math.abs(before[i+2]-after[i+2]);if(delta>9){changed++;if(Math.floor(i/4/e.W)<e.H*.66)belowSky++;}}
+      checks.push({id:v.id,changed,belowSky,glError:gl.getError()});
+    }return checks;
+  })()`);
+  assert.ok(lyricChecks.every(c=>c.changed>30&&c.glError===0),JSON.stringify(lyricChecks));
+  assert.equal(lyricChecks.find(c=>c.id==='landscape').belowSky,0);
+  results.push({test:'lyrics atlas visibly highlights on every supported visual; Dunes text stays in the sky',checks:lyricChecks});
+  // Visual-owned textures are reconstructed on restore and remain valid after a resize.
+  for(const id of ['urchin','landscape','nightdrive']) {
+    const ok=await evaluate(`new Promise(resolve=>{
+      const e=diggy.engine;e.setVisual('${id}',{instant:true});window.__step(1/60);
+      const ext=e.gl.getExtension('WEBGL_lose_context');
+      e.canvas.addEventListener('webglcontextlost',()=>setTimeout(()=>ext.restoreContext(),100),{once:true});
+      e.canvas.addEventListener('webglcontextrestored',()=>{window.__step(1/60);resolve(e.currentVisual.id==='${id}'&&e.gl.getError()===0);},{once:true});ext.loseContext();
+    })`);
+    assert.ok(ok);results.push({test:id+' data texture restoration',passed:true});
+  }
   // Low-resolution temporal diagnostic, not a WCAG/medical certification or an FPS test.
   // Exercise consecutive frames with hard 150 BPM attacks, including the two arrivals.
   await send('Emulation.setDeviceMetricsOverride',{width:120,height:214,deviceScaleFactor:1,mobile:true});

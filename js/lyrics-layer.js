@@ -18,7 +18,7 @@ export const LYRIC_FONTS = {
   serif: { family: '"Cormorant Garamond", Georgia, "Times New Roman", serif', w0: 500, w1: 700, size: 1.12 },
 };
 /** Placement per visual: y = height of the current line (0 bottom … 1 top), occlude = bright parts cover the text. */
-export const DEFAULT_LYRIC_STYLE = { y: 0.2, font: "sans", occlude: true, ink: null, accent: null };
+export const DEFAULT_LYRIC_STYLE = { y: 0.2, font: "sans", occlude: true, ink: null, accent: null, clip: [0, 1] };
 
 /** Split a line into at most two rows that fit `maxW` (break near the middle at a space). Pure helper. */
 export function wrapLine(text, measure, maxW) {
@@ -102,7 +102,7 @@ export function createLyricsLayer({ doc = typeof document !== "undefined" ? docu
       const k = `${id}|${view.at}|${st.font}|${fontsReady}`;
       if (k !== key) { key = k; draw(lines, view, st); }
       const word = view.cur >= 0 && view.word >= 0 && wordEnds.length ? [textStart, wordEnds[Math.min(view.word, wordEnds.length - 1)]] : [-1, -1];
-      return { canvas, version, glide: view.glide, emph: view.emph, hasCur: view.cur >= 0 ? 1 : 0, word, y: st.y, occlude: st.occlude ? 1 : 0, ink: st.ink, accent: st.accent };
+      return { canvas, version, glide: view.glide, emph: view.emph, hasCur: view.cur >= 0 ? 1 : 0, word, y: st.y, clip: st.clip, occlude: st.occlude ? 1 : 0, ink: st.ink, accent: st.accent };
     },
   };
 }

@@ -7,7 +7,7 @@ export function advanceDunes(s,a,dt) {
   dt=clamp(dt||0,0,.1);s.time+=dt;s.travel+=dt*.22;
   const hit=(a.beatIdx||0)>s.kick||(a.snareN||0)>s.snare;
   s.kick=a.beatIdx||0;s.snare=a.snareN||0;
-  if(hit&&(a.rest||0)<.8) {
+  if(hit&&Math.max(a.kick||0,a.snare||0,a.hit||0)>.05) {
     const strength=clamp(Math.max(a.kick||0,(a.snare||0)*.65,a.hit||0));
     // Close hits combine. The world cell remains fixed after its brief growth phase.
     const z=Math.round((s.travel+12)/1.3)*1.3,last=s.ridges.at(-1);

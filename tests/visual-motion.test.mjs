@@ -40,3 +40,8 @@ test('Dunes: camera speed is steady under different beats and rest states',()=>{
  for(let i=0;i<300;i++){r.beatIdx=i;r.kick=1;r.rest=i>150?1:0;advanceDunes(a,l,1/30);advanceDunes(b,r,1/30);}
  assert.equal(a.travel,b.travel);assert.ok(b.ridges.length<=32);
 });
+test('the first measured hit after silence is visible even while the rest envelope is still high',()=>{
+ const a=audio();a.rest=1;a.kick=1;a.hit=1;a.beatIdx=1;
+ const u=createUrchinMotion();updateUrchin(u,a,1/60);assert.equal(u.events.length,1);assert.ok(Math.max(...u.lengths)>.6);
+ const d=createDunes();advanceDunes(d,a,1/60);assert.equal(d.ridges.length,1);
+});

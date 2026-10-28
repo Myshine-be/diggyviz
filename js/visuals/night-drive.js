@@ -101,25 +101,26 @@ vec2 bodyCoords(vec2 cell, vec2 lp, int k) {
     float r=length(radial);
     vec2 start=-behind;
     u=acos(clamp(dot(radial/max(r,0.0001),start),-1.0,1.0))/(PI*0.5);
-    d=r-0.5;
+    d=(ahead.x*behind.y-ahead.y*behind.x)*(r-0.5);
   }
   return vec2(float(k)-0.5+u,d);
 }
 vec3 stringsBody(float s, float d, float aa) {
-  float f=clamp((s-1.0)/max(uLen-1.0,1.0),0.0,1.0);
+  float acousticS=s+uFrac;
+  float f=clamp((acousticS-1.0)/max(uLen-1.0,1.0),0.0,1.0);
   float live=histSmooth(f,0.0);
   float trailing=histSmooth(f,min(0.32,f*0.32));
-  float amp=(1.0-exp(-2.3*live))*(1.0-0.7*uRest);
-  float halfWidth=0.12+0.26*amp;
-  float bend=0.025*waveAt(f)*amp;
+  float amp=clamp(pow(live,1.35)+0.55*flux(f),0.0,1.0)*(1.0-0.7*uRest*(1.0-uHit));
+  float halfWidth=0.12+0.24*amp;
+  float bend=0.045*waveAt(f)*amp;
   float endMask=smoothstep(0.0,0.3,uLen-uFrac-s);
   vec3 ink=vec3(0);
   for(int j=0;j<8;j++) {
     float strand=float(j)/7.0*2.0-1.0;
-    float ripple=sin(s*(1.8+2.5*f)+float(j)*0.35)*0.018*trailing*(1.0-strand*strand);
+    float ripple=sin(acousticS*(1.8+2.5*f)+float(j)*0.35)*0.018*trailing*(1.0-strand*strand);
     float offset=strand*halfWidth+bend+ripple;
     float dist=abs(d-offset);
-    float line=1.0-smoothstep(aa*0.2,aa*0.85+0.009,dist);
+    float line=1.0-smoothstep(aa*0.10,aa*0.36+0.004,dist);
     ink+=pal(0.4+0.4*f+strand*0.035)*line*0.55;
   }
   return ink*endMask;

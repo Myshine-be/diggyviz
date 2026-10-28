@@ -163,7 +163,7 @@ precision highp float;
 uniform sampler2D uScene, uBloom; uniform vec2 uRes; uniform float uBloomAmt, uTime, uGrain, uGrade, uRest;
 // lyrics layer (js/lyrics-layer.js): atlas of 8 slots, left half regular / right half bold weight
 uniform sampler2D uLyr; uniform float uLyrOn, uLyrY, uLyrGlide, uLyrEmph, uLyrHasCur, uLyrOcc;
-uniform vec2 uLyrWord; uniform vec3 uLyrInk, uLyrAccent;
+uniform vec2 uLyrWord, uLyrClip; uniform vec3 uLyrInk, uLyrAccent;
 out vec4 fragColor;
 // premultiplied text colour + coverage at this pixel. The current line stands still at uLyrY; on a new line the
 // whole stack slides up one row (uLyrGlide 0→1). Past lines above, coming lines below, both quieter.
@@ -191,7 +191,8 @@ vec4 lyricsLayer(vec2 fc) {
     vec3 col = mix(uLyrInk, uLyrAccent, bold) * mix(0.85, 1.15, bold);
     acc += vec4(col, 1.0) * a * op * (1.0 - acc.a);
   }
-  return acc;
+  float fy = fc.y / uRes.y;
+  return acc * smoothstep(uLyrClip.x, uLyrClip.x + 0.025, fy) * (1.0 - smoothstep(uLyrClip.y - 0.025, uLyrClip.y, fy));
 }
 float h(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }

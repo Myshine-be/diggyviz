@@ -48,8 +48,9 @@ void main() {
   vec3 col=uPal[0]*.25+pal(.45)*.018;
   if(r<1.0+px) {
     float front=sqrt(max(0.0,1.0-r*r));
-    vec3 glass=mix(vec3(.22,.25,.25),vec3(.52,.55,.51),smoothstep(-1.0,1.0,q.y));
+    vec3 glass=mix(vec3(.09,.12,.13),vec3(.27,.32,.30),smoothstep(-1.0,1.0,q.y));
     glass=mix(glass,glass*(.5+pal(.55)),.18);
+    glass*=.45+.55*front; // transparent-looking edge rather than a uniformly lit moon disc
     // Very mild refraction; the masses remain spread throughout the bowl.
     vec3 ro=vec3(q*(1.0-.035*front),front),rd=vec3(0,0,-1);
     float t=.015;bool hit=false;float d=1.0;
@@ -73,6 +74,7 @@ void main() {
     vec3 nGlass=vec3(q,front);
     float softbox=pow(max(dot(nGlass,normalize(vec3(-.55,.65,.6))),0.0),75.0);
     glass+=vec3(.18,.19,.18)*softbox;
+    glass+=pal(.65)*edge*max(dot(q,normalize(vec2(.7,.5))),0.0)*.14;
     col=mix(col,glass,1.0-smoothstep(1.0-px,1.0+px,r));
   }
   col+=pal(.6)*exp(-abs(r-1.0)*160.0)*.08;

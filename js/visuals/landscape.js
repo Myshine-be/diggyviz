@@ -3,7 +3,7 @@ import {createDunes,advanceDunes,bakeDunes,DUNE_SAMPLES} from './dune-ridges.js'
 const states=new WeakMap();
 export default {
   id:'landscape',name:'Dunes',bloom:.12,grade:.2,
-  lyrics:{y:{land:.82,port:.79},font:'serif',occlude:false,ink:[.97,.91,.8]},
+  lyrics:{y:{land:.82,port:.79},font:'serif',occlude:false,clip:[.66,.98],ink:[.97,.91,.8]},
   uniforms({gl,loc,frame,slot}) {
     let s=states.get(slot);
     if(!s){s={model:createDunes(),tex:null};states.set(slot,s);}
