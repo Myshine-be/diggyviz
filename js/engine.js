@@ -183,6 +183,7 @@ export class Engine {
       u.tex("uScene", this.mixT.tex, 0); u.tex("uBloom", this.bloomA.tex, 1);
       u.f("uBloomAmt", bloomAmt); u.f("uTime", f.time); u.f("uGrain", 0.035);
       u.f("uGrade", (this.cur.vis.grade ?? 1) * ease + (this.old ? (this.old.vis.grade ?? 1) * (1 - ease) : 0));
+      u.f("uRest", f.audio.rest ?? 0);
     });
   }
 
@@ -210,7 +211,7 @@ export class Engine {
     if (L.uBands) gl.uniform1fv(L.uBands, A.bands);
     if (L.uPeaks) gl.uniform1fv(L.uPeaks, A.peaks);
     if (L.uFlux && A.flux) gl.uniform1fv(L.uFlux, A.flux);
-    set1("uHit", A.hit ?? Math.max(A.kick, A.snare)); set1("uKickN", A.beatIdx ?? 0); set1("uSnareN", A.snareN ?? 0);
+    set1("uHit", A.hit ?? Math.max(A.kick, A.snare)); set1("uRest", A.rest ?? 0); set1("uKickN", A.beatIdx ?? 0); set1("uSnareN", A.snareN ?? 0);
     if (L.uPal) gl.uniform3fv(L.uPal, [...pal.dark, ...pal.mid, ...pal.hi, ...pal.hot].map((v) => v / 255));
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, single ? this.blankTex : src.tex); if (L.uPrev) gl.uniform1i(L.uPrev, 0);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.artTex); if (L.uArt) gl.uniform1i(L.uArt, 1);
@@ -218,6 +219,8 @@ export class Engine {
     gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, this.histTex); if (L.uHistS) gl.uniform1i(L.uHistS, 3);
     set1("uHistHead", this.sound?.head ?? 0); set1("uLive", this.sound?.live ? 1 : 0);
     set1("uHistFrac", Math.min(0.999, (this.sound?.acc ?? 0) * HIST_RATE));
+    // visuals with their own data (e.g. Snake's board) upload it here; texture units ≥ 4 are theirs
+    if (slot.vis.uniforms) { try { slot.vis.uniforms({ gl, loc: L, frame: f, slot, width: dst.w, height: dst.h }); } catch (e) { console.error(e); } }
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     if (!single) slot.i = 1 - slot.i;
     return dst.tex;

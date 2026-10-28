@@ -32,6 +32,7 @@ export function makeDetector(sampleRate, fftSize, nb = 32) {
     bassMax: 0.3, bassFloor: 0.1, prevBass: 0, fluxAvg: 0.02,
     prevMid: 0, prevHi: 0, midAvg: 0.02, hiAvg: 0.02,
     levelMax: 0.25, slow: 0, fast: 0, quiet: 0,
+    levelAvg: 0.1, restTime: 0, rest: 0,
     t: 0, lastKick: -1, kicks: [], bpm: 120, phaseAt: 0,
     kick: 0, snare: 0, hat: 0, punch: 0, boom: 0, beatIdx: 0,
   };
@@ -127,6 +128,14 @@ export function processSpectrum(st, spec, dt, out) {
   out.beat = ((st.t - st.phaseAt) / beatLen) % 1; out.beatIdx = st.beatIdx;
   out.snareN = st.snareN;
   out.hit = Math.max(out.kick, out.snare * 0.85, fluxMax * 0.7);
+  // rest = a pause or break in the song: the level drops far below its own recent average for > 0.4 s
+  // (relative, so a quiet song is not a pause). Soft in/out (~0.5 s) so visuals can slow down and breathe.
+  const raw = avgBins(spec, st.bodyR[0], st.bodyR[1]) + avgBins(spec, st.bassR[0], st.bassR[1]);
+  st.levelAvg += (raw - st.levelAvg) * (1 - Math.exp(-dt / (raw > st.levelAvg ? 1.5 : 6)));
+  const silent = raw < Math.max(0.035, st.levelAvg * 0.45);
+  st.restTime = silent ? st.restTime + dt : 0;
+  st.rest += ((st.restTime > 0.4 ? 1 : 0) - st.rest) * (1 - Math.exp(-dt * 2.2));
+  out.rest = st.rest;
   out.t = st.t;
   return out;
 }

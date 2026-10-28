@@ -16,6 +16,7 @@ import { createTabListener } from "./tab-audio.js";
 import { createSystemListener, listInputs, permissionGranted } from "./system-audio.js";
 import { createFilePlayer } from "./file-player.js";
 import { createDesktopListener, isDesktop } from "./desktop-audio.js";
+import { createLyrics } from "./lyrics.js";
 import { audioData, setWave, feedHistory, synthWave, resetAudioData, WAVE_N } from "./audio-data.js";
 
 if (window.__bridge) throw new Error("iOS bridge redirect");
@@ -27,6 +28,8 @@ const fmt = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return Math.
 const track = { id: "", name: "", artists: "", art: "", dur: 210000, prog: 0, playing: false, at: performance.now() };
 let tempo = { bpm: 120, off: 0 };
 let drop = 0;
+const lyrics = createLyrics();   // synced lyrics for Orbit (fetched only while Orbit is on screen)
+let songsPlayed = store.get("snakeSongs", 0);   // how many songs DiggyViz has seen (Snake grows with them)
 let palCur = clonePal(DEFAULT_PAL), palTarget = clonePal(DEFAULT_PAL);
 let source = null, sourceName = store.get("source", null);
 let auto = store.get("auto", true);
@@ -168,6 +171,7 @@ async function onTrack(t) {
   }
   loadTempo(t.bpm || 120);
   lookupTempo(t);
+  songsPlayed = store.get("snakeSongs", 0) + 1; store.set("snakeSongs", songsPlayed);   // Snake grows with every song
   const isFirst = firstTrack;
   drop = isFirst ? 0 : 1;
   taps = [];
@@ -234,7 +238,7 @@ function refreshSpotifyState() {
 }
 
 /* ---------------- render loop ---------------- */
-let last = performance.now(), t0 = last, lastBpmShown = 0;
+let last = performance.now(), t0 = last, lastBpmShown = 0, visTime = 0;
 const micWave = new Float32Array(WAVE_N);
 let soundMode = null;
 function frame(now) {
@@ -246,7 +250,7 @@ function frame(now) {
   if (mode !== soundMode) {
     resetAudioData(); soundMode = mode;
     audio.bands.fill(0); audio.peaks.fill(0); audio.flux.fill(0);
-    for (const key of ["kick", "snare", "hat", "energy", "level", "hit"]) audio[key] = 0;
+    for (const key of ["kick", "snare", "hat", "energy", "level", "hit", "rest"]) audio[key] = 0;
   }
   // Listening mode: the microphone's real kicks drive the rhythm (beat phase and tempo). Otherwise the
   // simulated rhythm follows the song position and the tapped / looked-up tempo.
@@ -269,7 +273,11 @@ function frame(now) {
 
   if (engine) {
     try {
-      engine.render({ sceneDt: document.visibilityState === "visible" && track.playing && !sheetOpen() ? elapsed : 0, bpm: bpmNow, beatPhase: audio.beat, time: (now - t0) / 1000, dt, songTime: pos / 1000, audio, pal: palCur, drop, seed: hashStr(track.id || "x") % 1000, sound: audioData });
+      // during a rest (pause/break in the song) the visuals slow down to 30 % and breathe; time never jumps
+      const pace = 1 - 0.7 * (audio.rest || 0);
+      visTime += Math.min(elapsed, 0.25) * pace;
+      engine.render({ sceneDt: document.visibilityState === "visible" && track.playing && !sheetOpen() ? elapsed * pace : 0, bpm: bpmNow, beatPhase: audio.beat, time: visTime, dt, songTime: pos / 1000, audio, pal: palCur, drop, seed: hashStr(track.id || "x") % 1000, sound: audioData, songs: songsPlayed,
+        lyrics: visual?.id === "orbit" && track.id ? { id: track.id, lines: lyrics.linesFor(track), posMs: pos } : null });
     } catch (e) { console.error(e); }
   }
   $("bar").style.width = (track.dur ? (pos / track.dur) * 100 : 0) + "%";

@@ -188,3 +188,28 @@ App 0.1.1+ clears the HTTP cache at start and reloads with F5 / Ctrl+R (GitHub P
   two moons and the ringed planet, crystal mountains, glowing plants; he hops over boulders, mushroom houses and crystal
   clusters, with a big leap every 8th beat. The equalizer hills are gone.
 - `story-shapes.js` now also holds `glorp()` and `astronaut()`.
+
+## 2.9 — approved proposal docs/voorstel-2.9.md, built
+- **Visual-owned data:** a visual may export `uniforms({ gl, loc, frame, slot, width, height })`; the engine calls it
+  right before drawing. Texture units ≥ 4 belong to the visual (Snake uses 4, Orbit 5). Keep state per GL context
+  (WeakMap) and re-create textures when `gl.isTexture()` is false (context restore).
+- **Rest (pauses):** `audio.rest` 0..1 (listen.js: level far below its own recent average for > 0.4 s; rhythm.js: song
+  paused) → uniform `uRest`. app.js slows visual time (`visTime`) and story time to 30 % during a rest; the final pass
+  softens colours and breathes slowly (no brightness jump). Visual accents: Urchin spikes withdraw, Strings relax,
+  Dunes flatten, Snake stops and looks around. Tests: tests/rest.test.mjs.
+- **Snake** (id `nightdrive`, file night-drive.js; logic js/visuals/snake-path.js, tests/snake.test.mjs): plays itself
+  (BFS to the apple with a free-space safety check), two moves per beat (story beats), body = live equalizer
+  (segment k = frequency k/len, ripples head→tail), grows 2 per song (`rv.snakeSongs`, passed as `frame.songs`),
+  molts back to 6 after 120; heart of apples at 90–105 s. Board = 64×64 RGBA texture (R = segment index+1, G = apple).
+- **Orbit lyrics** (js/lyrics.js, tests/lyrics.test.mjs): LRCLIB `/api/get` then `/api/search`, only artist/title/
+  duration sent, `credentials: "omit"`, no referrer, fetched only while Orbit is on screen, memory cache only.
+  Lines are drawn into a 1024² canvas atlas (current-3 … current+6) → texture; the shader puts them on latitude bands
+  of the front hemisphere, current line in front with a karaoke fill. No lyrics → the original rings.
+  Copyright: lyrics are shown live from LRCLIB, never stored in the repo; Mo accepted this in the 2.9 review.
+  LRCLIB CORS from GitHub Pages was not verifiable from Claude's sandbox — if the fetch fails Orbit falls back to rings.
+- **Halo** removed (12 visuals). **Warp:** no kick/snare/hit brightness. **Tunnel:** soft polygon ring morphing to a
+  new corner count on each kick, crinkles per direction on highs, faster feedback decay, cover colours, no centre spark.
+- **Spectrum:** smooth levels (histSmooth, partly lit top LED), glass LEDs, sparks on fresh highs, and a layout that
+  glides every 40 s: mirrored row → arch → ring → classic row.
+- **Dunes** (id `landscape`): new sound appears at the horizon and rolls towards the viewer; heights saturated and
+  capped (~15 % of the screen); moons shared with Bloop.

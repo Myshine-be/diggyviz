@@ -73,6 +73,7 @@ float spikeLen(vec3 q, float id) {
             + 2.0 * snareSel(id) * uSnare            // snare / clap group
             + uDrop * 0.6;
   // Smooth saturation keeps every tip inside the bounding sphere, even on a track change.
+  raw *= 1.0 - 0.75 * uRest;                              // a pause: the spikes withdraw
   return 0.07 + 0.79 * (1.0 - exp(-raw * jitter));
 }
 

@@ -28,22 +28,21 @@ void main() {
   vec2 p = P();
   float r = length(p);
   vec2 dir = p / max(r, 1e-4);
-  float speed = 0.35 + uEnergy * 0.9 + uKick * 1.8 + uDrop * 6.0;
+  float speed = 0.35 + uEnergy * 0.9 + uKick * 0.8 + uDrop * 6.0;
   float streak = speed * 2.2 * r * 3.0;
 
   vec3 col = uPal[0] * 0.2;
   // nebula
   float n = fbm2(vec2(atan(p.y, p.x) * 1.5, log(r + 0.05) * 2.0 - uTravel * 0.3));
   col += pal(0.45) * n * n * 0.22 * smoothstep(0.0, 0.6, r);
-  col += pal(0.7) * exp(-r * 8.0) * (0.15 + uKick * 0.9);
-  col += pal(0.95) * exp(-r * 3.0) * uSnare * 0.25;
+  col += pal(0.7) * exp(-r * 8.0) * 0.15;              // steady core glow: no flash on the beat
 
   const float LAYERS = 5.0;
   for (float i = 0.0; i < LAYERS; i++) {
     float depth = fract(i / LAYERS + uTravel * 0.12);
     float scale = mix(20.0, 2.2, depth);
     float fade = depth * (1.0 - smoothstep(0.85, 1.0, depth));
-    col += layer(p * scale + i * 37.3, dir, streak * depth, i * 17.0) * fade * (1.0 + 0.8 * uHit);
+    col += layer(p * scale + i * 37.3, dir, streak * depth, i * 17.0) * fade;
   }
   fragColor = vec4(col, 1.0);
 }`,

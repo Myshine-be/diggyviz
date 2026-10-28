@@ -90,7 +90,7 @@ try {
   await waitFor('!!window.diggy?.engine && window.__frames.length > 0');
   await evaluate(`window.__time = performance.now(); document.querySelector('[data-pick="demo"]').click(); document.querySelector('#autoBtn').click(); window.__step(1/60);`);
   const ids = await evaluate('window.diggy.engine.visuals.map(v => v.id)');
-  assert.equal(ids.length, 13);
+  assert.equal(ids.length, 12);   // Halo removed in 2.9
   assert.ok(['chrome','moire','glass'].every(id=>!ids.includes(id)));
   await evaluate(`(async()=>{const d=await import('./js/audio-data.js');const bands=new Float32Array(32);for(let n=0;n<70;n++){for(let i=0;i<32;i++)bands[i]=.5+.4*Math.sin(n*.2+i*.5);d.pushHistory(bands);}d.setWave(new Float32Array(128).map((_,i)=>Math.sin(i*.2)*.7));})()`);
   for (const id of ids) {
@@ -117,21 +117,20 @@ try {
   const ridge=await evaluate(`(async()=>{
     const {audioData,pushHistory}=await import('./js/audio-data.js');const e=diggy.engine;
     const vis=e.visuals.find(v=>v.id==='landscape');
-    e.visuals.push({...vis,id:'qa-landscape-before',frag:vis.frag.replace('(1.0 - smoothstep(-px, px, p.y - y)) * smoothstep(0.0, 1.2, d)', '(1.0 - smoothstep(-px, px, p.y - y))')});
     const a={bands:new Float32Array(32).fill(1),peaks:new Float32Array(32).fill(1),flux:new Float32Array(32).fill(1),kick:1,snare:1,hat:1,energy:1,level:1,hit:1,beat:0};
     for(let i=0;i<65;i++)pushHistory(a.bands);
     const checks=[];
-    for(const id of ['qa-landscape-before','landscape'])for(const time of [0,1/9,2/9,.001]){
+    for(const id of ['landscape'])for(const time of [0,1/9,2/9,.001]){
       e.setVisual(id,{instant:true});
       e.render({time,dt:1/60,sceneDt:0,bpm:120,songTime:30,audio:a,pal:{dark:[2,4,8],mid:[30,220,130],hi:[140,250,220],hot:[245,60,160]},drop:0,seed:11,sound:audioData});
       const gl=e.gl,p=new Uint8Array(e.W*e.H*4);gl.readPixels(0,0,e.W,e.H,gl.RGBA,gl.UNSIGNED_BYTE,p);let lit=0;
       for(let i=0;i<p.length;i+=4)if(p[i]+p[i+1]+p[i+2]>30)lit++;
       checks.push({id,time,lit,glError:gl.getError()});
-    }e.visuals.splice(e.visuals.findIndex(v=>v.id==='qa-landscape-before'),1);return checks;
+    }return checks;
   })()`);
-  assert.ok(ridge.some(r=>r.id==='qa-landscape-before'&&r.lit<100),'fixture must reproduce the original black frame');
+  // 2.9: Landscape became Dunes (a new shader); the old ridge-occlusion fixture no longer applies. Loud input must still light the frame.
   assert.ok(ridge.filter(r=>r.id==='landscape').every(r=>r.lit>100&&r.glError===0),JSON.stringify(ridge));
-  results.push({test:'loud newborn Landscape ridges do not black out the frame',checks:ridge});
+  results.push({test:'loud Dunes input keeps the frame lit',checks:ridge});
   // Story clocks must survive a real onTrack callback, pause, and the 45-second carousel boundary.
   for (const id of ['nightdrive','bloop']) {
     const result = await evaluate(`(async()=>{
@@ -317,7 +316,7 @@ try {
     })()`);
     assert.equal(stats.glError,0);assert.ok(stats.litFraction>0);hits.push(stats);await screenshot('hit-'+id+'-'+state);
   }
-  results.push({test:'13 visuals at rest, kick and snare',hits});
+  results.push({test:'12 visuals at rest, kick and snare',hits});
   // Low-resolution temporal diagnostic, not a WCAG/medical certification or an FPS test.
   // Exercise consecutive frames with hard 150 BPM attacks, including the two arrivals.
   await send('Emulation.setDeviceMetricsOverride',{width:120,height:214,deviceScaleFactor:1,mobile:true});

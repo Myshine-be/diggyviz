@@ -33,7 +33,7 @@ void main() {
   float tall = clamp(uRes.y / uRes.x - 1.0, 0.0, 1.3);
   float u = clamp((p.x + halfW) / (2.0 * halfW), 0.0, 1.0);        // 0..1 across the full width
   float env = pow(sin(PI * u), 1.35);                               // pinched at both ends
-  float amp = 0.15 * (1.0 + 0.8 * tall);
+  float amp = 0.15 * (1.0 + 0.8 * tall) * (1.0 - 0.65 * uRest);   // a pause: the strings relax almost straight
 
   vec3 col = uPal[0] * 0.10;
   col += mix(uPal[1], uPal[2], u) * 0.05 * exp(-p.y * p.y * 18.0) * env;   // soft haze around the bundle

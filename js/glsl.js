@@ -19,6 +19,7 @@ uniform float uSeed;       // per-track 0..999
 uniform float uBands[32];  // spectrum 0..1, low → high
 uniform float uPeaks[32];
 uniform float uFlux[32];   // onsets 0..1: a new note or change of timbre in that band (fast attack, ~0.1 s fade)
+uniform float uRest;       // 0..1: a pause or break in the song (soft in/out). Visuals slow down and breathe.
 uniform float uHit;        // strongest hit right now (kick, snare/clap or onset), 0..1
 uniform float uKickN, uSnareN; // kick / snare counters: hash them to pick a different group on every hit
 uniform vec3  uPal[4];     // 0 dark, 1 mid, 2 hi, 3 hot (0..1)
@@ -159,7 +160,7 @@ void main() {
 
 export const FINAL_FRAG = /* glsl */ `#version 300 es
 precision highp float;
-uniform sampler2D uScene, uBloom; uniform vec2 uRes; uniform float uBloomAmt, uTime, uGrain, uGrade;
+uniform sampler2D uScene, uBloom; uniform vec2 uRes; uniform float uBloomAmt, uTime, uGrain, uGrade, uRest;
 out vec4 fragColor;
 float h(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
@@ -172,6 +173,10 @@ void main() {
   c = c * cos(ga) + cross(gk, c) * sin(ga) + gk * dot(gk, c) * (1.0 - cos(ga));
   float gl = dot(c, vec3(0.299, 0.587, 0.114));
   c = max(mix(vec3(gl), c, 1.0 + 0.2 * uGrade), 0.0);
+  // rest (pause in the song): colours soften and the picture breathes slowly (no brightness jump)
+  float lumR = dot(c, vec3(0.299, 0.587, 0.114));
+  float breath = 0.5 + 0.5 * sin(uTime * 1.4);
+  c = mix(vec3(lumR), c, 1.0 - uRest * (0.25 + 0.15 * breath)) * (1.0 - 0.1 * uRest);
   c = aces(c * 1.05);
   vec2 q = uv - 0.5; c *= 1.0 - dot(q, q) * 0.55;
   c += (h(gl_FragCoord.xy + fract(uTime * 13.7) * 311.0) - 0.5) * uGrain;

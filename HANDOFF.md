@@ -1,3 +1,31 @@
+# Stand 28 oktober 2026, laat (Claude) — DiggyViz 2.9.0 gebouwd volgens docs/voorstel-2.9.md
+Mo en ChatGPT gingen akkoord met het voorstel. Alles uit het voorstel is gebouwd; de details staan in AGENTS.md onder "2.9".
+
+## Getest
+- **Node-tests:** 89, onder meer voor:
+  - pauzes;
+  - Snake: speelt 4000 zetten zonder botsing, groeit, is deterministisch, eet het hart;
+  - songteksten: LRC-parser, zoeken, geen credentials meegestuurd.
+- **Browsertest:** `tests/browser.mjs` slaagt. De oude Landscape-fixture is vervangen, want Landscape is nu een nieuwe shader (Dunes).
+- **Temporele luminantie:**
+  - Warp ging van 0,065 naar 0,004;
+  - Tunnel ging van 0,035 naar 0,01;
+  - Dunes 0,005;
+  - Snake 0,004.
+- **Stills:**
+  - Snake in landschap en portret;
+  - Orbit met verzonnen testteksten (de fetch was gestubd);
+  - Spectrum in de vier opstellingen;
+  - Dunes;
+  - Tunnel.
+
+## Open / niet getest
+- **LRCLIB:** of de echte verbinding vanaf GitHub Pages werkt (CORS), kon niet getest worden: lrclib.net is geblokkeerd in Claudes sandbox. Lukt het niet, dan toont Orbit gewoon de ringen. Controleer dit in de browser.
+- **Snake op de iPhone:** de prestaties op native resolutie zijn niet gemeten.
+- **Vanish:** heeft nog de hoogste temporele luminantie (0,148).
+
+---
+
 # Stand 28 oktober 2026, nacht — DiggyViz 2.8.0 (Claude)
 Mo's wensen in deze ronde: kleuren per nummer uit de hoes, rustiger automatisch wisselen, geen flitsen in Urchin, Soul Beat levendiger, Strings zoals Vanish, Bubbles herwerken, Night Drive → ruimte, en Bloop als alien op een eigen planeet.
 

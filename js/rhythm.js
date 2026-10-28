@@ -47,5 +47,6 @@ export function analyse(posMs, playing, seed, bpm, offMs, dt = 1 / 60) {
   audio.beat = ph; audio.beatIdx = beatIdx;
   audio.snareN = Math.floor((beatIdx + 1) / 2);
   audio.hit = Math.max(audio.kick, audio.snare * 0.85);
+  audio.rest = (audio.rest ?? 0) + ((playing ? 0 : 1) - (audio.rest ?? 0)) * (1 - Math.exp(-elapsed * 2.2));   // paused song = rest
   audio.t = t; audio.seed = seed;
 }
