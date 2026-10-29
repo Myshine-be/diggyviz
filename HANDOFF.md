@@ -1,7 +1,6 @@
-# HANDOFF — DiggyViz 3.0.0-beta (branch `claude/visuals-3.0`, NIET live)
+# HANDOFF — DiggyViz 3.0.0 (live sinds 29 oktober 2026)
 
-Mo's 3.0-briefing is **volledig uitgewerkt op de branch** (Claude, 29 oktober 2026). `main` en de live site zijn
-ongewijzigd: **pas mergen na Mo's akkoord** op de previews. Alle 108 unit-tests en de browsertest (12 visuals compileren) slagen.
+Mo's 3.0-briefing is volledig uitgewerkt (Claude, 29 oktober 2026) en op Mo's vraag live gezet (`main`). Alle 108 unit-tests en de browsertest (12 visuals compileren) slagen.
 
 ## Wat er veranderde
 1. **Songtekstlaag achter elke visual** — `js/lyrics.js` (`lyricView`, echte woordstempels), `js/lyrics-layer.js`
@@ -24,7 +23,8 @@ ongewijzigd: **pas mergen na Mo's akkoord** op de previews. Alle 108 unit-tests 
    gevoeligheid/hersteltijd per stekel, rust kort, bal-straal vast 0.5, glow begrensd (geen helderheidspulsen).
 
 ## Previews
-Mo kreeg per onderdeel een mp4 (vóór | na, landschap + portret) met hetzelfde echte-muziekfragment en dezelfde hoes.
+Mo kreeg previews (vóór | na, landschap + portret) met hetzelfde echte-muziekfragment en dezelfde hoes. Flitscontrole
+met echte muziek (gemiddelde luminantie per frame): alle vijf < 1,5 % sprong per frame (Dunes-zandsluier eerst 4 % → lokaal gemaakt).
 Gereedschap staat in Claude's sandbox (`qa/preview.py`, `qa/compare.py`), niet in de repo.
 
 ## Openstaand / eerlijk

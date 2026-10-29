@@ -214,7 +214,7 @@ App 0.1.1+ clears the HTTP cache at start and reloads with F5 / Ctrl+R (GitHub P
 - **Dunes** (id `landscape`): new sound appears at the horizon and rolls towards the viewer; heights saturated and
   capped (~15 % of the screen); moons shared with Bloop.
 
-## 3.0 — lyrics layer and five reworked visuals (branch claude/visuals-3.0, review by Mo before merge)
+## 3.0 — lyrics layer and five reworked visuals (live since 29 Oct 2026, Mo's go)
 - **Lyrics layer** behind every visual: timing ONLY from LRC timestamps vs. the real playback position (`lyricView` in
   js/lyrics.js; never BPM/kicks). No current line without synced lyrics, without a known position (Last.fm `approx`),
   before the first line or in empty (instrumental) LRC lines. Slide only on a normal step to the next line; seek/pause/
@@ -232,6 +232,6 @@ App 0.1.1+ clears the HTTP cache at start and reloads with F5 / Ctrl+R (GitHub P
 - **Tunnel:** analytic (depth = 0.33 / r), no feedback. Do not reintroduce central shapes: with feedback they become
   the walls. Rings fade out before reaching the camera (no passing glare).
 - **Dunes:** heightfield raymarch; beat ridges from js/visuals/dune-ridges.js (pure, tested) baked into an R16F texture
-  on unit 4; heights capped so the horizon and the sky (lyrics) stay free; the sand veil is the only beat accent.
+  on unit 4; heights capped so the horizon and the sky (lyrics) stay free; the sand veil is the only beat accent and stays on ONE near crest (a wide veil gave 4 % luminance jumps per frame).
 - **Urchin:** hits → events (js/visuals/urchin-events.js, pure, tested) → uniforms `uEvA/uEvB[6]`. Ball radius fixed
   0.5 (+ spike ≤ 0.86 = 1.36 < 1.40: never clipped). No energy/kick-driven brightness anywhere.

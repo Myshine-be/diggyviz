@@ -102,7 +102,7 @@ void main() {
       vec3 pos = ro + rd * t;
       float d = pos.y - H(pos.xz);
       // sand veil above crests (the current beat), only close by
-      if (t < 7.0) veil += exp(-max(d, 0.0) * 9.0) * smoothstep(0.12, 0.3, pos.y - d) * exp(-pow(pos.x * 0.35 - uVeil.y * 1.2, 2.0)) * 0.02;
+      if (t > 1.2 && t < 6.0) veil += exp(-max(d, 0.0) * 14.0) * smoothstep(0.22, 0.42, pos.y - d) * exp(-pow(pos.x - uVeil.y * 1.6, 2.0) * 1.5) * 0.02;   // one near crest only
       if (d < 0.0015 * t) {
         hit = true;
         // refine between the last two samples: no terraces on grazing distant slopes
@@ -137,7 +137,7 @@ void main() {
       float fog = 1.0 - exp(-t * 0.05);
       col = mix(sand, mix(sky, skyCol(vec3(rd.x, 0.0, rd.z)), 0.6), pow(fog, 1.15));
     }
-    col += mix(vec3(1.0, 0.85, 0.65), uPal[2], 0.3) * veil * uVeil.x * 0.9;
+    col += mix(vec3(1.0, 0.85, 0.65), uPal[2], 0.3) * min(veil, 0.5) * uVeil.x * 0.45;
   }
   fragColor = vec4(col, 1.0);
 }
