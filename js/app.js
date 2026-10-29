@@ -31,7 +31,7 @@ let tempo = { bpm: 120, off: 0 };
 let drop = 0;
 const lyrics = createLyrics();   // synced lyrics (fetched only while the lyrics layer is on or Orbit is on screen)
 const lyricsLayer = createLyricsLayer();
-let lyricsOn = store.get("lyrics", true);   // the lyrics layer behind the visuals (⚙ or key L)
+let lyricsOn = store.get("lyricsOn", false);   // OFF by default (Mo): only on when switched on by hand (button, ⚙ or key L). New key, so everyone starts off
 let songsPlayed = store.get("snakeSongs", 0);   // how many songs DiggyViz has seen (Snake grows with them)
 let palCur = clonePal(DEFAULT_PAL), palTarget = clonePal(DEFAULT_PAL);
 let source = null, sourceName = store.get("source", null);
@@ -302,7 +302,7 @@ function lyricsFrame(visual, pos) {
   return { orbit: null, layer: lyricsLayer.frame({ lines, sec: pos / 1000, posKnown: !track.approx, id: track.id, style: visual.lyrics, W: engine?.W || innerWidth, H: engine?.H || innerHeight }) };
 }
 function setLyrics(on) {
-  lyricsOn = on; store.set("lyrics", on);
+  lyricsOn = on; store.set("lyricsOn", on);
   $("lyricsChk").checked = on;
   $("lyricsBtn").setAttribute("aria-pressed", String(on));
   status(on ? "Songteksten aan" : "Songteksten uit");
