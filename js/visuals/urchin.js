@@ -5,7 +5,8 @@
 // group that shoots far out, sharp hits a compact quick group, highs only fine local motion. Some clear hits send a
 // wave over the surface from their cluster. Big difference between rest and a strong hit, fast out, slower back,
 // always bounded (never clipped, also in portrait). No light or brightness pulses: only the spikes move.
-import { createUrchinEvents, stepUrchin, packEvents, MAXEV } from "./urchin-events.js";
+import { createUrchinEvents, stepUrchin, spikeLengths, NSPIKES } from "./urchin-events.js";
+import { toHalf } from "./dune-ridges.js";
 
 const states = new WeakMap();
 
@@ -17,18 +18,29 @@ export default {
 
   uniforms({ gl, loc, frame }) {
     let st = states.get(gl);
-    if (!st) { st = { ev: createUrchinEvents(), A: new Float32Array(MAXEV * 4), B: new Float32Array(MAXEV * 4), last: null }; states.set(gl, st); }
+    if (!st || !gl.isTexture(st.tex)) {
+      const tex = gl.createTexture();
+      gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16F, NSPIKES, 1, 0, gl.RED, gl.HALF_FLOAT, null);
+      for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+      st = { tex, ev: st?.ev || createUrchinEvents(), len: new Float32Array(NSPIKES), half: new Uint16Array(NSPIKES), last: st?.last ?? null };
+      states.set(gl, st);
+    }
     const t = frame.time ?? 0, dt = st.last === null ? 0 : Math.max(0, Math.min(0.1, t - st.last));
     st.last = t;
     stepUrchin(st.ev, frame.audio, dt);
-    packEvents(st.ev, st.A, st.B);
-    if (loc.uEvA) gl.uniform4fv(loc.uEvA, st.A);
-    if (loc.uEvB) gl.uniform4fv(loc.uEvB, st.B);
+    // every spike's length, once per frame on the CPU (≈ 0.5 ms) instead of per pixel per raymarch step on the GPU
+    spikeLengths(st.ev, frame, st.len);
+    for (let i = 0; i < NSPIKES; i++) st.half[i] = toHalf(st.len[i]);
+    gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, st.tex);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 2);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, NSPIKES, 1, gl.RED, gl.HALF_FLOAT, st.half);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+    if (loc.uSpikeL) gl.uniform1i(loc.uSpikeL, 4);
   },
 
   frag: /* glsl */ `
-uniform vec4 uEvA[6];   // event direction (view space) + age in seconds
-uniform vec4 uEvB[6];   // strength, cluster radius (rad), wave 0/1, kind 0 bass / 1 sharp
+uniform sampler2D uSpikeL;   // length of every spike, computed per frame in urchin-events.js (spikeLengths)
 const float PHI = 1.61803398875;
 const float NSPIKES = 420.0;
 
@@ -79,50 +91,12 @@ mat3 orient() {
   return rx * ry;
 }
 
-vec3 gUp; vec3 gEvDir[6];
-
-// Each spike: its own sensitivity, its own recovery time, a pitch from its height on screen (lows at the bottom,
-// highs at the top, with a soft noisy overlap). Hits act on clusters (events), not on every spike at once.
-float spikeLen(vec3 q, float id) {
-  float h1 = hash13(vec3(id, 1.7, 3.1)), h2 = hash13(vec3(id, 5.3, 0.7));
-  float sens = 0.6 + 0.8 * h1;
-  float tau = 0.15 + 0.30 * h2;                                  // neighbours recover at different speeds
-  float ys = dot(q, gUp);
-  float fq = clamp(0.5 + 0.42 * ys + 0.3 * (noise3(q * 2.2 + uSeed * 0.013) - 0.5), 0.0, 1.0);
-  // rest: short; the own pitch only stirs a little, highs make small local groups twitch
-  float raw = 0.06 + 0.22 * pow(band(fq), 1.8) * sens;
-  float grp = smoothstep(0.55, 0.75, noise3(q * 5.0 + vec3(0.0, uTime * 0.4, 0.0)));
-  raw += 0.55 * flux(fq) * sens * mix(0.25, 1.0, grp) * smoothstep(0.35, 0.7, fq);
-  for (int i = 0; i < 6; i++) {
-    float s = uEvB[i].x;
-    if (s <= 0.0) continue;
-    float age = uEvA[i].w, rad = uEvB[i].y, sharp = uEvB[i].w;
-    float cd = dot(q, gEvDir[i]);
-    if (cd < -0.2 && uEvB[i].z < 0.5) continue;               // far side of a cluster without wave: no effect
-    float ang = sqrt(max(0.0, 2.0 * (1.0 - cd))) * (1.0 + 0.08 * (1.0 - cd));   // cheap arc length (no acos)
-    float cl = exp(-pow(ang / rad, 2.0) * 2.0);
-    float att = smoothstep(0.0, mix(0.04, 0.025, sharp), age);   // fast out (the first cluster reacts at once)
-    float rel = exp(-age / (tau * mix(1.0, 0.7, sharp)));      // a little slower back, per spike
-    raw += s * mix(2.6, 1.7, sharp) * sens * cl * att * rel;
-    if (uEvB[i].z > 0.5) {                                      // a wave travelling over the surface from the cluster
-      float front = rad * 0.5 + age * mix(3.2, 4.5, sharp);
-      float ring = exp(-pow((ang - front) / 0.25, 2.0)) * step(rad * 0.4, ang);
-      raw += s * 1.3 * sens * ring * exp(-age / 0.7);
-    }
-  }
-  raw += uDrop * 0.4;
-  raw *= 1.0 - 0.75 * uRest;                                     // a pause: the spikes withdraw
-  float jitter = 0.85 + 0.3 * h2;
-  // smooth saturation keeps every tip inside the bounding sphere (R + 0.86 ≤ 1.40)
-  return 0.05 + 0.81 * (1.0 - exp(-raw * jitter));
-}
-
 float map(vec3 p) {
   float r = length(p);
   vec3 n = p / max(r, 1e-4);
   vec4 s = sfNearest(n, NSPIKES);
-  float L = spikeLen(s.xyz, s.w);
-  float dSpike = sdRoundCone(p, s.xyz * R * 0.9, s.xyz * (R + L), 0.035, 0.0035);
+  float L = texelFetch(uSpikeL, ivec2(int(s.w + 0.5), 0), 0).r;
+  float dSpike = sdRoundCone(p, s.xyz * R * 0.9, s.xyz * (R + L), 0.035, 0.006);   // tips not thinner than about a pixel: no sparkling jaggies
   float dCore = r - R;
   gTip = clamp((dot(p, s.xyz) - R) / L, 0.0, 1.0);
   gId = s.w; gQ = s.xyz;
@@ -137,8 +111,6 @@ vec3 calcNormal(vec3 p) {
 void main() {
   vec2 p = P();
   R = 0.5;                                                      // the ball itself stays calm
-  gUp = orient() * vec3(0.0, 1.0, 0.0);
-  for (int i = 0; i < 6; i++) gEvDir[i] = orient() * normalize(uEvA[i].xyz + vec3(0.0, 0.0, 1e-4));
   // Max extent is R(0.50) + L(0.86) = 1.36 (< 1.40); with a 0.37 half-FOV tangent that fits the
   // portrait width from distance >= 4.03. 4.05 keeps the orb as large as possible.
   vec3 ro = vec3(0.0, 0.0, 4.05);

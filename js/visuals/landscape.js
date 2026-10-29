@@ -98,7 +98,7 @@ void main() {
 
   if (rd.y < 0.06) {
     float t = 0.3, h = 0.0; bool hit = false; float prevT = t, prevD = 1.0;
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 72; i++) {
       vec3 pos = ro + rd * t;
       float d = pos.y - H(pos.xz);
       // sand veil above crests (the current beat), only close by
@@ -107,12 +107,12 @@ void main() {
         hit = true;
         // refine between the last two samples: no terraces on grazing distant slopes
         float lo = prevT, hi2 = t;
-        for (int k = 0; k < 5; k++) { float m = 0.5 * (lo + hi2); vec3 q = ro + rd * m; if (q.y - H(q.xz) > 0.0) lo = m; else hi2 = m; }
+        for (int k = 0; k < 4; k++) { float m = 0.5 * (lo + hi2); vec3 q = ro + rd * m; if (q.y - H(q.xz) > 0.0) lo = m; else hi2 = m; }
         t = 0.5 * (lo + hi2);
         break;
       }
       prevT = t; prevD = d;
-      t += max(0.01 + t * 0.003, d * 0.4);
+      t += max(0.012 + t * 0.006, d * 0.5);
       if (t > 48.0) break;
     }
     if (hit) {

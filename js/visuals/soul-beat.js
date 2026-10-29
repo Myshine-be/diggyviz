@@ -37,41 +37,48 @@ float sdCapsule(vec3 p, vec3 a, vec3 b, float ra, float rb) {
   return length(pa - ba * h) - mix(ra, rb, h);
 }
 
+// everything that does not depend on the sample point is computed ONCE per pixel (prepInk), not per raymarch step
+vec3 gC[7], gAx[7]; float gR[7], gAxK[7]; float gBass, gHi, gKickK, gSn;
+void prepInk() {
+  gBass = smoothstep(0.05, 0.6, histSmooth(0.04, 0.0));
+  gHi = clamp(smoothstep(0.05, 0.6, histSmooth(0.6, 0.0)) + flux(0.7), 0.0, 1.2);
+  gKickK = clamp(uKick, 0.0, 1.0) * (1.0 - 0.8 * uRest);
+  gSn = clamp(uSnare, 0.0, 1.0) * (1.0 - 0.8 * uRest);
+  for (int i = 0; i < NM; i++) {
+    float fi = float(i);
+    gC[i] = massPos(i);
+    gR[i] = (0.10 + 0.045 * massLevel(i) * (1.0 - 0.8 * uRest)) * (i == gKick ? 1.0 + 0.35 * gKickK : 1.0);
+    // every mass is stretched along its own slowly turning axis: irregular, never a perfect ball
+    gAx[i] = normalize(vec3(sin(gT * 0.31 + fi), cos(gT * 0.23 + fi * 2.1), sin(gT * 0.17 + fi * 3.3)));
+    gAxK[i] = 0.3 + 0.15 * sin(gT * 0.4 + fi * 1.7);
+  }
+}
 float inkMap(vec3 p) {
   float d = 1e3;
-  float bass = smoothstep(0.05, 0.6, histSmooth(0.04, 0.0));
   for (int i = 0; i < NM; i++) {
-    vec3 c = massPos(i);
-    float L = massLevel(i) * (1.0 - 0.8 * uRest);
-    float fi = float(i);
-    float r = 0.10 + 0.045 * L;
+    vec3 c = gC[i];
+    float r = gR[i];
     vec3 q = p - c;
-    // every mass is stretched along its own slowly turning axis: irregular, never a perfect ball
-    vec3 ax = normalize(vec3(sin(gT * 0.31 + fi), cos(gT * 0.23 + fi * 2.1), sin(gT * 0.17 + fi * 3.3)));
-    q -= ax * dot(q, ax) * (0.3 + 0.15 * sin(gT * 0.4 + fi * 1.7));
+    q -= gAx[i] * dot(q, gAx[i]) * gAxK[i];
     if (i == gKick) {                                     // kick: this mass bulges and stretches, then recovers
-      float k = clamp(uKick, 0.0, 1.0) * (1.0 - 0.8 * uRest);
       float along = dot(q, gKickDir);
-      q -= gKickDir * along * (0.55 * k / (1.0 + 0.55 * k));
-      r *= 1.0 + 0.35 * k;
+      q -= gKickDir * along * (0.55 * gKickK / (1.0 + 0.55 * gKickK));
     }
     float di = length(q) - r;
     if (i == gSnare) {                                    // snare / sharp hit: a thin tendril and a drop that lets go
-      float sn = clamp(uSnare, 0.0, 1.0) * (1.0 - 0.8 * uRest);
       vec3 base = c + gSnDir * r * 0.7;
-      vec3 tip = base + gSnDir * (0.05 + 0.26 * sqrt(sn));
-      di = smin(di, sdCapsule(p, base, tip, 0.03 * (0.4 + sn), 0.006), 0.04);
-      vec3 drop = base + gSnDir * (0.12 + 0.36 * (1.0 - sn));
-      di = smin(di, length(p - drop) - 0.028 * sqrt(sn), 0.025);
+      vec3 tip = base + gSnDir * (0.05 + 0.26 * sqrt(gSn));
+      di = smin(di, sdCapsule(p, base, tip, 0.03 * (0.4 + gSn), 0.006), 0.04);
+      vec3 drop = base + gSnDir * (0.12 + 0.36 * (1.0 - gSn));
+      di = smin(di, length(p - drop) - 0.028 * sqrt(gSn), 0.025);
     }
     d = smin(d, di, 0.12);
   }
   // bass: broad, slow pressure waves through the whole ink
   vec3 fl = vec3(0.0, gT * 0.35, gT * 0.2);
-  d += (noise3(p * 2.6 + fl) - 0.5) * (0.07 + 0.13 * bass) + (noise3(p * 6.3 - fl * 1.3) - 0.5) * 0.035;
+  d += (noise3(p * 2.6 + fl) - 0.5) * (0.075 + 0.13 * gBass);
   // mids and highs: small ripples along the edges
-  float hi = smoothstep(0.05, 0.6, histSmooth(0.6, 0.0)) + flux(0.7);
-  d += (noise3(p * 13.0 + fl * 3.0) - 0.5) * 0.016 * clamp(hi, 0.0, 1.2);
+  if (gHi > 0.02 && d < 0.08) d += (noise3(p * 9.0 + fl * 3.0) - 0.5) * 0.02 * gHi;   // only near the surface
   // the glass is the boundary, not a funnel: ink flattens softly against it
   d = -smin(-d, -(length(p) - RIN), 0.06);
   return d;
@@ -100,6 +107,7 @@ void main() {
   float sa = hash12(vec2(uSnareN, 1.9)) * TAU, sb = hash12(vec2(uSnareN, 6.2)) * 2.0 - 1.0;
   gSnDir = normalize(vec3(cos(sa) * sqrt(1.0 - sb * sb), sb, sin(sa) * sqrt(1.0 - sb * sb)));
 
+  prepInk();
   vec3 ro = vec3(0.0, -0.1, 2.9);
   vec3 rd = normalize(vec3(p, -1.6));
   float px = 1.5 / min(uRes.x, uRes.y);
@@ -122,11 +130,11 @@ void main() {
     // march the ink inside the glass
     float ti = 0.0, tEnd = (t1 - t0) * 1.05;
     bool hit = false; vec3 pos = pe;
-    for (int i = 0; i < 72; i++) {
+    for (int i = 0; i < 60; i++) {
       pos = pe + ri * ti;
       float d = inkMap(pos);
       if (d < 0.0015) { hit = true; break; }
-      ti += max(d * 0.85, 0.004);
+      ti += max(d * 0.85, 0.006);
       if (ti > tEnd) break;
     }
     if (hit) {

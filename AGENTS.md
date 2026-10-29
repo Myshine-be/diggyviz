@@ -241,5 +241,8 @@ App 0.1.1+ clears the HTTP cache at start and reloads with F5 / Ctrl+R (GitHub P
   the walls. Rings fade out before reaching the camera (no passing glare).
 - **Dunes:** heightfield raymarch; beat ridges from js/visuals/dune-ridges.js (pure, tested) baked into an R16F texture
   on unit 4; heights capped so the horizon and the sky (lyrics) stay free; the sand veil is the only beat accent and stays on ONE near crest (a wide veil gave 4 % luminance jumps per frame).
-- **Urchin:** hits → events (js/visuals/urchin-events.js, pure, tested) → uniforms `uEvA/uEvB[6]`. Ball radius fixed
+- **Urchin:** hits → events (js/visuals/urchin-events.js, pure, tested); since 3.0.4 `spikeLengths()` computes all 420
+  spike lengths on the CPU once per frame (≈ 0.5 ms) → R16F texture on unit 4. Lesson: evaluating the 6 events inside
+  the raymarch (per pixel per step) made Urchin 3× slower than 2.9 — Mo saw pixels (adaptive scale dropped) and delay.
+  Keep per-frame work out of the raymarch; hoist per-pixel constants (Soul Beat `prepInk()`). Ball radius fixed
   0.5 (+ spike ≤ 0.86 = 1.36 < 1.40: never clipped). No energy/kick-driven brightness anywhere.

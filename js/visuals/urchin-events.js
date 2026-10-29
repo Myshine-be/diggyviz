@@ -62,3 +62,64 @@ export function packEvents(st, A, B) {
     B.set([e.s, e.rad, e.wave ? 1 : 0, e.kind === "bass" ? 0 : 1], i * 4);
   });
 }
+
+// ---- spike lengths, computed here once per frame (not per pixel and raymarch step: that made 3.0.0 three times
+// slower than 2.9 on the GPU, which lowered the render resolution and added delay) ----
+export const NSPIKES = 420;
+const PHI = 1.61803398875;
+
+/** Direction of spike i on the spherical Fibonacci lattice (same as sfNearest in urchin.js). */
+export function spikeDir(i, n = NSPIKES) {
+  const m = 1 - 1 / n, ph = 2 * Math.PI * ((i * PHI) % 1), ct = m - 2 * i / n, st = Math.sqrt(Math.max(0, 1 - ct * ct));
+  return [Math.cos(ph) * st, Math.sin(ph) * st, ct];
+}
+const DIRS = Array.from({ length: NSPIKES }, (_, i) => spikeDir(i));
+const H1 = DIRS.map((_, i) => hash(i * 1.7 + 3.1)), H2 = DIRS.map((_, i) => hash(i * 5.3 + 0.7));
+
+/** orient() of urchin.js (column-major mat3, rx * ry) applied to v. */
+export function orientMul(time, songTime, v) {
+  const a = time * 0.13 + songTime * 0.05, b = time * 0.09;
+  const ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b);
+  const y = [ca * v[0] - sa * v[2], v[1], sa * v[0] + ca * v[2]];          // ry * v
+  return [y[0], cb * y[1] + sb * y[2], -sb * y[1] + cb * y[2]];            // rx * y
+}
+const lerpArr = (arr, x) => { if (!arr) return 0; const f = Math.min(1, Math.max(0, x)) * 31, i = Math.floor(f), j = Math.min(i + 1, 31); return arr[i] + (arr[j] - arr[i]) * (f - i); };
+const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+/**
+ * Length of every spike now (0.05 … 0.86). f = { time, songTime, audio: { bands, flux, rest }, drop, seed }.
+ * Same rules as before: pitch zones by screen height (lows bottom, highs top), own sensitivity and recovery per spike,
+ * clusters and waves from the events, fast out / slower back, bounded so tips stay inside the bounding sphere.
+ */
+export function spikeLengths(st, f, out) {
+  const up = orientMul(f.time || 0, f.songTime || 0, [0, 1, 0]);
+  const ev = st.ev.map((e) => ({ d: orientMul(f.time || 0, f.songTime || 0, e.dir), age: st.time - e.born, s: e.s, rad: e.rad, wave: e.wave, sharp: e.kind === "bass" ? 0 : 1 }));
+  const A = f.audio || {}, rest = A.rest || 0, t = f.time || 0, seed = f.seed || 0;
+  for (let i = 0; i < NSPIKES; i++) {
+    const q = DIRS[i], h1 = H1[i], h2 = H2[i];
+    const sens = 0.6 + 0.8 * h1, tau = 0.15 + 0.30 * h2;
+    const ys = q[0] * up[0] + q[1] * up[1] + q[2] * up[2];
+    const wob = Math.sin(q[0] * 3.1 + q[2] * 2.3 + seed * 0.01) * Math.sin(q[1] * 2.7 - q[0] * 1.9);
+    const fq = Math.min(1, Math.max(0, 0.5 + 0.42 * ys + 0.15 * wob));
+    let raw = 0.06 + 0.22 * Math.pow(lerpArr(A.bands, fq), 1.8) * sens;
+    const grp = sstep(0.4, 0.9, Math.sin(q[0] * 9 + t * 0.7) * Math.sin(q[1] * 8 - t * 0.5) * Math.sin(q[2] * 7 + t * 0.3) + 0.5);
+    raw += 0.55 * lerpArr(A.flux, fq) * sens * (0.25 + 0.75 * grp) * sstep(0.35, 0.7, fq);
+    for (const e of ev) {
+      const cd = q[0] * e.d[0] + q[1] * e.d[1] + q[2] * e.d[2];
+      if (cd < -0.2 && !e.wave) continue;
+      const ang = Math.sqrt(Math.max(0, 2 * (1 - cd))) * (1 + 0.08 * (1 - cd));
+      const cl = Math.exp(-((ang / e.rad) ** 2) * 2);
+      const att = sstep(0, e.sharp ? 0.025 : 0.04, e.age);
+      const rel = Math.exp(-e.age / (tau * (e.sharp ? 0.7 : 1)));
+      raw += e.s * (e.sharp ? 1.7 : 2.6) * sens * cl * att * rel;
+      if (e.wave) {
+        const front = e.rad * 0.5 + e.age * (e.sharp ? 4.5 : 3.2);
+        raw += e.s * 1.3 * sens * Math.exp(-(((ang - front) / 0.25) ** 2)) * (ang >= e.rad * 0.4 ? 1 : 0) * Math.exp(-e.age / 0.7);
+      }
+    }
+    raw += (f.drop || 0) * 0.4;
+    raw *= 1 - 0.75 * rest;
+    out[i] = 0.05 + 0.81 * (1 - Math.exp(-raw * (0.85 + 0.3 * h2)));
+  }
+  return out;
+}

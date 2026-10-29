@@ -63,3 +63,23 @@ test('packing for the shader', () => {
   assert.ok(A[3] > 0 && B[0] > 0 && B[1] === Math.fround(EVENT.bassRad) && B[7] === 1);
   assert.equal(B[8], 0);
 });
+
+import { spikeLengths, spikeDir, NSPIKES, orientMul } from '../js/visuals/urchin-events.js';
+
+test('spike lengths (CPU, once per frame): bounded, short at rest, a bass hit drives a broad group at the bottom', () => {
+  const out = new Float32Array(NSPIKES);
+  const quiet = createUrchinEvents();
+  spikeLengths(quiet, { time: 0, audio: { bands: new Float32Array(32).fill(0.2), flux: new Float32Array(32) } }, out);
+  assert.ok(Math.max(...out) < 0.3 && Math.min(...out) >= 0.05);
+  const st = createUrchinEvents(); stepUrchin(st, { beatIdx: 0, snareN: 0 }, 0.016);
+  stepUrchin(st, { beatIdx: 1, snareN: 0, kick: 1, hit: 1, bands: bassBands }, 0.016);
+  for (let i = 0; i < 4; i++) stepUrchin(st, { beatIdx: 1, snareN: 0, bands: bassBands }, 0.016);
+  spikeLengths(st, { time: 0, audio: { bands: new Float32Array(32).fill(0.2), flux: new Float32Array(32) } }, out);
+  assert.ok(Math.max(...out) <= 0.86 + 1e-6);
+  const d = orientMul(0, 0, st.ev[0].dir);
+  const near = [], far = [];
+  for (let i = 0; i < NSPIKES; i++) { const q = spikeDir(i); const c = q[0] * d[0] + q[1] * d[1] + q[2] * d[2]; (c > 0.9 ? near : c < 0 ? far : []).push(out[i]); }
+  const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+  assert.ok(avg(near) > avg(far) * 2, `cluster ${avg(near)} vs rest ${avg(far)}`);
+  assert.ok(Math.abs(Math.hypot(...spikeDir(7)) - 1) < 1e-9);
+});

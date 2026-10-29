@@ -11,7 +11,7 @@ export class Engine {
     this.canvas = canvas;
     this.visuals = visuals;
     this.onError = onError || ((m) => console.error(m));
-    const gl = canvas.getContext("webgl2", { antialias: false, alpha: false, depth: false, stencil: false, premultipliedAlpha: false, powerPreference: "high-performance" });
+    const gl = canvas.getContext("webgl2", { antialias: false, alpha: false, depth: false, stencil: false, premultipliedAlpha: false, powerPreference: "high-performance", desynchronized: true });   // desynchronized: low-latency canvas (one compositor frame less delay)
     if (!gl) throw new Error("WebGL2 wordt niet ondersteund door deze browser.");
     this.gl = gl;
     // Render at the screen's full native resolution (up to 3 device pixels per CSS pixel).
