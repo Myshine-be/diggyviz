@@ -50,7 +50,7 @@
       </div>
       <span class="src" id="srcBadge">demo</span>
     </div>
-    <button class="icon lyr" id="lyricsBtn" aria-pressed="true" aria-label="Songteksten aan of uit" title="Songteksten aan/uit (L)">
+    <button class="icon lyr" id="lyricsBtn" aria-pressed="false" aria-label="Songteksten aan of uit" title="Songteksten aan/uit (L)">
       <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M4 5.5h16v2H4zm0 5h11v2H4zm0 5h16v2H4z"/><path fill="currentColor" d="M18.5 9.2v4.6a2 2 0 1 0 1.5 1.9V11h1.5V9.2z"/></svg>
     </button>
     <button class="icon" id="settingsBtn" aria-label="Instellingen">
@@ -146,7 +146,7 @@
     <section>
       <h3>Visuals</h3>
       <label class="switch"><input type="checkbox" id="autoChk" checked> Automatisch wisselen (45 s; verhaalwerelden 2 minuten)</label>
-      <label class="switch"><input type="checkbox" id="lyricsChk" checked> Songteksten achter de visual (meegesynchroniseerd; toets L)</label>
+      <label class="switch"><input type="checkbox" id="lyricsChk"> Songteksten achter de visual (meegesynchroniseerd; toets L)</label>
       <label class="switch">Stijl songtekst <select id="lyricsStyleSel"><option value="lines">Regels (gezongen zin + zachte buren)</option><option value="one">Eén zin</option></select></label>
       <p class="note" id="lyricsNote">Alleen artiest, titel en duur gaan naar LRCLIB (vrije songtekstendatabank). Niet elk nummer heeft gesynchroniseerde tekst.</p>
       <p class="note" id="tempoStatus" role="status"></p>
