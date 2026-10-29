@@ -1,3 +1,8 @@
+# HANDOFF — 3.0.2 op branch `claude/lyrics-calm` (NIET live, wacht op Mo's beoordeling)
+- Mo vond de schermvullende tekstmuur van 3.0.1 te druk (briefing 80e2c044). Nieuw: één rustig compact tekstblok
+  (gezongen zin + zachte buren of "Eén zin"), vaste rustige plek per visual, de visual heeft voorrang. Zie AGENTS.md § 3.0.
+- `main` draait nog 3.0.1. Mergen pas na Mo's akkoord op de previews (tekst uit | aan, Snake/Urchin/Dunes).
+
 # HANDOFF — DiggyViz 3.0.1 (live, 29 oktober 2026)
 - Songtekstlaag op Mo's vraag schermvullend gemaakt ("Gemengd"): een gedimde tekstmuur van het hele nummer van rand tot
   rand + de gezongen regel groot en fel erop. Zie AGENTS.md § 3.0 voor het ontwerp.

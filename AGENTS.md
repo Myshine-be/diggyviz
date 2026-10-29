@@ -220,15 +220,17 @@ App 0.1.1+ clears the HTTP cache at start and reloads with F5 / Ctrl+R (GitHub P
   before the first line or in empty (instrumental) LRC lines. Slide only on a normal step to the next line; seek/pause/
   gap → correct at once. Lines belong to a track id: a new song removes the old text immediately, late answers are never
   shown. Word highlight only with real `<mm:ss.xx>` word stamps — never invent word timing (Orbit no longer does).
-  3.0.1 look (Mo: "vullend, niet gecentreerd"): a full-screen WALL of the song's lyrics (uppercase, dimmed, wraps
-  around so the screen is always full, scrolls with `wallScroll()`: rests on the sung line, glides in the 0.5 s before
-  the next one) + the sung line LARGE and bright on top (accent colour, 1–3 balanced rows, cross-fade A/B slots).
-  js/lyrics-layer.js redraws its canvas only when the window of rows or the line changes. Final pass: text only where
-  the picture is dark (= behind the visual); `occlude:false` + `region` keep Dunes' text in the sky. Old text fades out
-  in 0.2 s on a new song (a hard cut gave a 4 % luminance step). Texture unit 6 is the engine's. Toggle: the lyrics
-  button next to the gear (`#lyricsBtn`), ⚙ checkbox, key L (`rv.lyrics`). Only artist/title/duration go to LRCLIB
-  (tested: no auth header, no token, no cookies). Visuals place it with
-  `lyrics: { y, big, region (each may be {land, port}), font: sans|light|mono|serif, occlude, ink, accent }` or `false`.
+  3.0.2 look (Mo: "de visual heeft altijd voorrang"): ONE calm compact block — the sung line and at most one line
+  before/after (`lines: 1` or ⚙ "Eén zin" shows only the sung line), all the same size, normal case, no letter-spacing,
+  no mono. The sung line is marked inside the block only by opacity (≈ 45 %) and a muted cover tint; neighbours ≈ 12 %;
+  a neighbour needing > 3 rows is left out. No glow, pulse, zoom, wall or second big line (3.0.1's full-screen wall was
+  rejected as too busy). On a new line the block slides up one line and the opacities flow over (`blockLayout()`).
+  Each visual gives ONE stable quiet place per orientation (`lyrics: { land: {x, y, align, width, lines}, port: {…},
+  font, occlude, ink, accent }`), outside its main shapes (Urchin/Soul Beat: a column beside the ball/glass in
+  landscape, below in portrait; Snake: the margin under the board; Dunes: the sky; Tunnel: low, away from the opening).
+  Final pass: text only where the picture is dark AND away from the blurred bloom (a soft gap around bright shapes).
+  Old text fades out in 0.2 s on a new song. Texture unit 6 is the engine's. Toggle: `#lyricsBtn`, ⚙ (`rv.lyrics`,
+  style `rv.lyricsStyle` = lines | one), key L. Only artist/title/duration go to LRCLIB (no auth header, token, cookies).
   Lesson: replacing a block of FINAL_FRAG once deleted `h()`/`aces()` and the whole engine failed to start — after
   touching glsl.js always load the page (or tests/browser.mjs) and check `diggy.engine`.
 - **Snake:** body = bundle of 6 fine lines along the path (quarter circles in corners, continuous arc length
