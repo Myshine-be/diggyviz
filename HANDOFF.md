@@ -1,30 +1,35 @@
-# HANDOFF — 3.0-briefing (branch `claude/visuals-3.0`, NIET live)
+# HANDOFF — DiggyViz 3.0.0-beta (branch `claude/visuals-3.0`, NIET live)
 
-Mo's briefing (songteksten + Snake/Soul Beat/Tunnel/Dunes/Urchin) is half af. Plan: zie onderaan. **Niets naar `main` vóór Mo's akkoord.**
+Mo's 3.0-briefing is **volledig uitgewerkt op de branch** (Claude, 29 oktober 2026). `main` en de live site zijn
+ongewijzigd: **pas mergen na Mo's akkoord** op de previews. Alle 113 unit-tests en de browsertest (12 visuals compileren) slagen.
 
-## Klaar (gecommit op deze branch, 97 unit-tests groen)
-1. **Songtekstlaag achter elke visual**
-   - `js/lyrics.js`: `parseLRC` haalt echte woordstempels `<mm:ss.xx>` eruit (`line.words`); nieuwe pure `lyricView(lines, sec, posKnown)`: geen huidige regel vóór de eerste regel, in lege (instrumentale) regels, zonder positie (Last.fm `approx`) of zonder sync; glijden alleen bij een normale stap naar de volgende regel, na seek/pauze/gat meteen juist.
-   - `js/lyrics-layer.js`: canvas-atlas 2048×1024 (8 slots; links regulier, rechts vet), alleen opnieuw getekend als de regels rond de huidige wijzigen. Fonts per visual: sans/light/mono/serif (fonts toegevoegd in index.html).
-   - `js/engine.js` + `FINAL_FRAG` in `js/glsl.js`: textuur-unit 6, `lyricsLayer()`; tekst komt alleen waar het beeld donker is (heldere delen van de visual dekken hem af = "achter"), `occlude:false` voor Dunes. Oude tekst verdwijnt meteen bij nieuw nummer.
-   - `js/app.js`: `lyricsFrame()`, `rv.lyrics` (⚙ vinkje `#lyricsChk`, toets L), diagnose (D) toont songtekst-status, `track.approx` bewaard, demo-nummers niet opgevraagd.
-   - Per visual `lyrics: { y, font, occlude, ink }` (urchin, soul-beat, night-drive, tunnel, landscape); Orbit `lyrics:false` (eigen bol) en Orbit kleurt nu de hele regel (verzonnen karaoke-vulling weg).
-   - Tests: `tests/lyrics.test.mjs` (woordstempels, pauze/seek/nieuw nummer/geen tekst/onbekende positie, laat antwoord vorige track, geen tokens/auth naar LRCLIB, wrap).
-   - **Nog niet gedaan:** echte LRCLIB-request vanaf Mo's toestel (lrclib.net is geblokkeerd in Claude's sandbox). Test: open de branch lokaal (`python3 -m http.server`), speel een Spotify-nummer, druk D → "songtekst: gevonden".
-   - **Nog niet nagekeken:** plaatsing (y) op Spectrum/Strings/Bubbles/Vanish/Warp/Bloop (standaard y=0.2) — bekijk en voeg zo nodig enkel een `lyrics:{y}`-hint toe.
+## Wat er veranderde
+1. **Songtekstlaag achter elke visual** — `js/lyrics.js` (`lyricView`, echte woordstempels), `js/lyrics-layer.js`
+   (atlas regulier+vet, slots), final pass in `js/glsl.js` (tekst alleen waar het beeld donker is = "achter"),
+   `js/engine.js` (unit 6, `uLyr*`), `js/app.js` (`lyricsFrame`, `rv.lyrics`, ⚙ + toets L, D-status). Per visual
+   `lyrics: { y | {land, port}, span, scale, font, occlude, ink, accent }`; Orbit `lyrics:false` en kleurt nu hele regels.
+   **Echte LRCLIB-test gedaan** vanaf https://myshine-be.github.io (Mo's ingebouwde browser, 29/10): Daft Punk "Get Lucky
+   (feat. …)" → 114 getimede regels, The Weeknd "Blinding Lights" → 40; een demo-nummer → netjes "none" (search gaf 503,
+   wordt opgevangen). CORS werkt dus. Nog niet getest: de match met een nummer dat Mo op dat moment op Spotify speelt.
+2. **Snake** — alleen het lijf: bundel van 6 fijne lijnen langs het pad (kwartcirkel in bochten, booglengte continu),
+   kop = lage tonen breed, staart = hoge tonen fijn, gebonden ≤ 0.44 cel. Hoofd/route/appels/easter egg ongewijzigd.
+3. **Soul Beat** — inkt in een glazen bol (raymarch ≤ 72 stappen, 7 massa's op eigen banen, geen centrum; kick = één
+   massa rekt, snare = rank + druppel, bas = drukgolven, hoog = randrimpels). Kost ~4× de oude 2D-versie (≈ Urchin).
+4. **Tunnel** — analytische tunnel zonder feedback en zonder centrale vormen: oplichtende contourringen die door de
+   muziek vervormen, mist naar een donkere open doorgang, constante snelheid. Tunnel blijft in de lijst.
+5. **Dunes** — hoogteveld-raymarch: procedurele duinen + beat-ruggen (`js/visuals/dune-ridges.js`, R16F op unit 4,
+   tests `tests/dunes.test.mjs`), lage zon, nevel, zandsluier op de beat, lyrics in de avondlucht (serif, ivoor/zand).
+6. **Urchin** — `js/visuals/urchin-events.js` (tests `tests/urchin.test.mjs`): clusters per hit (bas breed onderaan,
+   scherp compact bovenaan), golven (±1 op 3 heldere hits, nooit twee op rij), zones op beeldhoogte, eigen
+   gevoeligheid/hersteltijd per stekel, rust kort, bal-straal vast 0.5, glow begrensd (geen helderheidspulsen).
 
-## Nog te doen (in deze volgorde, telkens .bak, preview, commit op de branch)
-2. **Snake — alleen het lijf** (`js/visuals/night-drive.js`): rounded boxes + LED's vervangen door een bundel van ~8 fijne lijnen (Strings-principe, `js/visuals/strings.js` `trace()`). Per cel: in-/uitgangsrand uit buren k−1/k+1 (board-R = index+1); rechte cel = recht stuk, bocht = kwartcirkel rond de gedeelde hoek; booglengte `s = k−0.5+u` continu; zichtbaar van `s = 2−uFrac` tot `uLen−uFrac`. Kop = lage tonen (brede vervorming, `histSmooth(f(s), lag 0)`), staart = hoge (fijne rimpels), lag groeit naar de staart. Halve breedte zacht verzadigd ≤ 0.44 cel (geen overloop), basis 0.12, slanker bij `uRest`. Kleur `pal()`, 0.45–0.8, nooit wit. Hoofd/route/appels/timing/easter egg ongemoeid.
-3. **Soul Beat — inkt in glazen bol** (`soul-beat.js`, id + caption blijven): referentie eerste Chrome `git show 4b68807:js/visuals/chrome.js` (6 Lissajous-blobs, smin, geen centrum-aantrekking). Raymarch binnen de bol (≤72 stappen), 7 massa's op straal 0.35–0.62 van de bol, verspreid; GEEN smin naar zwaartepunt, geen kick-druppel rond `mass`. Bas = brede vervorming, kick = één massa (hash `uKickN`) bolt uit, snare = rank + loskomende druppel, hoog = randrimpels, rust = kalm. Donkere inkt, doorschijnende randen in hoeskleur, ingehouden glasreflectie. Witte maanschijf weg.
-4. **Tunnel** (`tunnel.js`): de polygoon in het midden bouwt via feedback de wanden → constructie vervangen door analytische polaire tunnel zonder feedback (`z = k/r`, wandtextuur (hoek, z+reis), mist naar het verdwijnpunt = donkere open doorgang, contour per hoek vervormd door `histSmooth`, constante snelheid). Overtuigt het niet: Tunnel uit `VISUALS` + autorotatie, opgeslagen keuze valt terug, tests (`browser.mjs` aantal visuals) aanpassen, melden.
-5. **Dunes** (`landscape.js`, id blijft): hoogteveld-raymarch (≤90 stappen), procedurele duinen (zachte loef, steile lij, scherpe kam), lage zon, windribbels, nevelhorizon; camera traag vooruit. Beat-ruggen via `uniforms()`-hook + nieuwe pure `dune-ridges.js` (sterkte meet hoogte/breedte, <0.3 s samenvoegen, groei 0.8 s, daarna vast = spoor), gebakken als R16F-hoogtekaart (unit 6 is nu van de lyrics → gebruik unit 4). Zandsluier op nabije kam bij de huidige beat. Lyrics in de lucht (hint staat al: y 0.8, serif, occlude false).
-6. **Urchin** (`urchin.js` + nieuwe pure `urchin-events.js`): per hit (JS, `uniforms()`-hook) soort (laag/hoog via bandverhouding), clusterrichting, sterkte, golf (±1 op 3 heldere hits, nooit twee op rij); ≤6 events als uniforms. Per stekel eigen gevoeligheid/hersteltijd 0.15–0.45 s; zones in beeld-y (onder laag, boven hoog); bas = brede groep ~55° ver uit, snare/hoge kick = compact ~20° scherp; golf loopt vanaf cluster. Lagere rustlengte, max R+L ≤ 1.40 (geen clipping in portret); glow normaliseren (geen helderheidspulsen).
+## Previews
+Mo kreeg per onderdeel een mp4 (vóór | na, landschap + portret) met hetzelfde echte-muziekfragment en dezelfde hoes.
+Gereedschap staat in Claude's sandbox (`qa/preview.py`, `qa/compare.py`), niet in de repo.
 
-## Previews met echte muziek (QA-gereedschap, niet in de repo)
-Claude bouwde `qa/preview.py` (virtuele tijd, nagebootste AnalyserNode → echte `processSpectrum`/`waveFrom` via `diggy.deskIn`) en `qa/compare.py` (vóór|na, landschap 640×360 + portret 360×640, luminantie-sprong per frame, rendertijd). Fragment 25 s: 0–8 rustig (Kevin MacLeod "Vibe Ace", CC-BY, librosa/data), 8–16 sterke bas/hits (Essentia `techno_loop.wav`), 16–19 stilte, 19–25 terug. Die bestanden staan in Claude's sandbox, niet in de repo; maak zo nodig een eigen gelijkwaardige opstelling. Per onderdeel: luminantiesprong < 10 %/frame, rendertijd vergelijken.
-
-## Afronden
-AGENTS.md sectie 3.0, versie 3.0.0-beta, verslag naar Mo met previews en eerlijk wat niet fysiek getest is. **Pas live na Mo's akkoord.**
+## Openstaand / eerlijk
+- Niet fysiek getest op iPhone-GPU of in de Windows-app; rendertijden zijn swiftshader-CPU (alleen relatief).
+- Dunes en Soul Beat zijn de zwaarste shaders nu; als D op iPhone < 40 fps toont: stappen verlagen (Dunes 100 → 70).
 
 ---
 # Stand 28 oktober 2026, laat (Claude) — DiggyViz 2.9.0 gebouwd volgens docs/voorstel-2.9.md

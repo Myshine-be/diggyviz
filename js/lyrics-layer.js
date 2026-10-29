@@ -60,14 +60,17 @@ export function createLyricsLayer({ doc = typeof document !== "undefined" ? docu
       const s = view.at - CENTER + j;
       if (s < 0 || s >= view.show.length) continue;
       const line = lines[view.show[s]];
+      // size and line breaks are decided with the BOLD weight and used for both columns, so the regular and the
+      // bold version overlap exactly (the shader blends between them)
+      const fontOf = (w, sz) => `${w} ${sz}px ${f.family}`;
+      let size = Math.round(50 * (f.size || 1));
+      ctx.font = fontOf(f.w1, size);
+      let rows = wrapLine(line.text, (t) => ctx.measureText(t).width, maxW);
+      if (rows.length > 1) { size = Math.round(size * 0.86); ctx.font = fontOf(f.w1, size); rows = wrapLine(line.text, (t) => ctx.measureText(t).width, maxW); }
+      const widest = Math.max(...rows.map((r) => ctx.measureText(r).width));
+      if (widest > maxW) size = Math.max(22, Math.floor(size * maxW / widest));
       for (const [col, weight] of [[0, f.w0], [1, f.w1]]) {
-        let size = Math.round(50 * (f.size || 1));
-        const font = (sz) => `${weight} ${sz}px ${f.family}`;
-        ctx.font = font(size);
-        let rows = wrapLine(line.text, (t) => ctx.measureText(t).width, maxW);
-        if (rows.length > 1) { size = Math.round(size * 0.86); ctx.font = font(size); rows = wrapLine(line.text, (t) => ctx.measureText(t).width, maxW); }
-        const widest = Math.max(...rows.map((r) => ctx.measureText(r).width));
-        if (widest > maxW) { size = Math.max(22, Math.floor(size * maxW / widest)); ctx.font = font(size); }
+        ctx.font = fontOf(weight, size);
         const cy = j * SLOT_H + SLOT_H / 2, lh = size * 1.08;
         rows.forEach((r, i) => ctx.fillText(r, col * COL + COL / 2, cy + (i - (rows.length - 1) / 2) * lh));
         // real word timestamps only: remember where each word of the current (single-row) line ends

@@ -58,7 +58,7 @@ No npm, no bundler, no framework. Plain ES modules + WebGL2. Keep it that way.
   continuous sub-row scrolling); never animate with `floor()`-ed time unless it is a deliberate pixel style.
 - Colours come from `uPal` / `pal()` so every visual follows the album art. `pal()` is a living neon gradient (hue drifts
   over time and along t). The final pass adds a neon grade (hue flows across the screen); set `grade: 0` on a visual
-  to opt out. Avoid hard-coded hues (exception: Soul Beat's white disc).
+  to opt out. Avoid hard-coded hues (exception: the warm sand base tones of Dunes).
 - Output can exceed 1.0; the final pass tone-maps (ACES) and adds bloom, vignette and grain.
 - Use `P()` for coordinates: shorter screen side spans −0.5…0.5, works in portrait and landscape.
 - Anti-alias edges with `fwidth` / `px = 1.5 / min(uRes.x, uRes.y)`.
@@ -213,3 +213,25 @@ App 0.1.1+ clears the HTTP cache at start and reloads with F5 / Ctrl+R (GitHub P
   glides every 40 s: mirrored row → arch → ring → classic row.
 - **Dunes** (id `landscape`): new sound appears at the horizon and rolls towards the viewer; heights saturated and
   capped (~15 % of the screen); moons shared with Bloop.
+
+## 3.0 — lyrics layer and five reworked visuals (branch claude/visuals-3.0, review by Mo before merge)
+- **Lyrics layer** behind every visual: timing ONLY from LRC timestamps vs. the real playback position (`lyricView` in
+  js/lyrics.js; never BPM/kicks). No current line without synced lyrics, without a known position (Last.fm `approx`),
+  before the first line or in empty (instrumental) LRC lines. Slide only on a normal step to the next line; seek/pause/
+  gap → correct at once. Lines belong to a track id: a new song removes the old text immediately, late answers are never
+  shown. Word highlight only with real `<mm:ss.xx>` word stamps — never invent word timing (Orbit no longer does).
+  Atlas: js/lyrics-layer.js (regular + bold columns with IDENTICAL size/wrapping — lesson: different sizes left a ghost
+  of the regular text around the bold line). Final pass: text only where the picture is dark (= behind the visual);
+  `occlude:false` for Dunes' sky. Texture unit 6 is the engine's. Toggle: `rv.lyrics`, ⚙, key L. Only artist/title/
+  duration go to LRCLIB (tested: no auth header, no token, no cookies). Visuals place it with
+  `lyrics: { y | {land, port}, span, scale, font: sans|light|mono|serif, occlude, ink, accent }` or `lyrics: false`.
+- **Snake:** body = bundle of 6 fine lines along the path (quarter circles in corners, continuous arc length
+  `s = k − 0.5 + u`), head = lows (broad), tail = highs (fine), bounded ≤ 0.44 cell, converging lines normalised.
+- **Soul Beat:** ink in a glass sphere (no white disc). No centre mechanism: masses on own paths at 0.36–0.62 of the
+  inner radius; never add a pull towards the centroid. Kick stretches ONE mass, snare pulls a tendril + drop.
+- **Tunnel:** analytic (depth = 0.33 / r), no feedback. Do not reintroduce central shapes: with feedback they become
+  the walls. Rings fade out before reaching the camera (no passing glare).
+- **Dunes:** heightfield raymarch; beat ridges from js/visuals/dune-ridges.js (pure, tested) baked into an R16F texture
+  on unit 4; heights capped so the horizon and the sky (lyrics) stay free; the sand veil is the only beat accent.
+- **Urchin:** hits → events (js/visuals/urchin-events.js, pure, tested) → uniforms `uEvA/uEvB[6]`. Ball radius fixed
+  0.5 (+ spike ≤ 0.86 = 1.36 < 1.40: never clipped). No energy/kick-driven brightness anywhere.

@@ -8,6 +8,7 @@ import { STORY_SHAPES } from "./story-shapes.js";
 
 export default {
   id: "bloop", name: "Bloop", story: true, duration: 120, bloom: 0.5,
+  lyrics: { y: 0.86, span: 1 },          // in the alien sky, above the parcours
   frag: STORY_SHAPES + /* glsl */ `
 const float SP = 0.22;      // platform spacing (world units per beat)
 float BX = -0.12;           // Bloop's fixed screen x while the world scrolls (moved right in portrait)
