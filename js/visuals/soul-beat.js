@@ -10,7 +10,7 @@
 export default {
   id: "soulbeat",
   name: "Soul Beat",
-  lyrics: { y: 0.12, big: 0.2, font: "light" },
+  lyrics: { land: { x: 0.03, y: 0.5, align: "left", width: 0.22 }, port: { y: 0.13 }, font: "light" },   // beside / under the glass
   bloom: 0.22,
   caption: true,
   frag: /* glsl */ `

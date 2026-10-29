@@ -161,38 +161,27 @@ void main() {
 export const FINAL_FRAG = /* glsl */ `#version 300 es
 precision highp float;
 uniform sampler2D uScene, uBloom; uniform vec2 uRes; uniform float uBloomAmt, uTime, uGrain, uGrade, uRest;
-// lyrics layer (js/lyrics-layer.js): a full-screen wall of the song's lyrics (dimmed) + the sung line large on top
-uniform sampler2D uLyr; uniform float uLyrOn, uLyrOcc;
-uniform vec4 uLyrWall;   // rows on screen, row offset in the texture, region bottom, region top (0..1 of the screen)
-uniform vec4 uLyrAtlas;  // wall height, big-slot height (fractions of the texture), texture px per screen px
-uniform vec4 uLyrBig;    // centre y, height (fraction of the screen), current alpha, previous alpha
+// lyrics layer (js/lyrics-layer.js): one calm block of at most 3 lines, the sung line marked by opacity and a muted tint
+uniform sampler2D uLyr; uniform float uLyrOn, uLyrOcc, uLyrSlotPx;
+uniform vec4 uLyrBox;        // left edge px, width px, screen px per atlas px, anchor y px (from the bottom)
+uniform vec4 uLyrSlots[5];   // per slot: y offset px (up +), opacity, tint (sung line), -
 uniform vec3 uLyrInk, uLyrAccent;
 out vec4 fragColor;
 float h(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
 // premultiplied text colour + coverage at this pixel
 vec4 lyricsLayer(vec2 fc) {
-  vec2 uv = fc / uRes;
+  float u = (fc.x - uLyrBox.x) / uLyrBox.z / 2048.0;
+  if (fc.x < uLyrBox.x || fc.x > uLyrBox.x + uLyrBox.y) return vec4(0.0);
   vec4 acc = vec4(0.0);
-  // the wall: rows from the top of its region, gently quieter above the sung line than below it
-  float rb = uLyrWall.z, rt = uLyrWall.w;
-  if (uv.y > rb && uv.y < rt) {
-    float rowF = (rt - uv.y) / (rt - rb) * uLyrWall.x + uLyrWall.y;   // row inside the texture window
-    float v = rowF * (uLyrAtlas.x / (uLyrWall.x + 4.0));     // nWin = rows on screen + 4
-    float a = texture(uLyr, vec2(uv.x, v)).a;
-    float past = smoothstep(uLyrBig.x + 0.02, uLyrBig.x + 0.25, uv.y);   // rows above the sung line are past lines
-    float edge = smoothstep(rb, rb + 0.04, uv.y) * smoothstep(rt, rt - 0.04, uv.y);
-    float op = mix(0.2, 0.12, past) * edge;
-    acc = vec4(uLyrInk, 1.0) * a * op;
-  }
-  // the sung line, large and bright, cross-fading to the next one
-  float bw = 0.92 * uRes.x, bh = uLyrBig.y * uRes.y;
-  vec2 q = vec2((fc.x - 0.5 * uRes.x) / bw + 0.5, (uLyrBig.x * uRes.y - fc.y) / bh + 0.5);
-  if (q.x > 0.0 && q.x < 1.0 && q.y > 0.0 && q.y < 1.0) {
-    float aC = texture(uLyr, vec2(q.x, uLyrAtlas.x + q.y * uLyrAtlas.y)).a * uLyrBig.z;
-    float aP = texture(uLyr, vec2(q.x, uLyrAtlas.x + (1.0 + q.y) * uLyrAtlas.y)).a * uLyrBig.w;
-    float a = max(aC, aP);
-    acc = acc * (1.0 - a) + vec4(uLyrAccent * 1.12, 1.0) * a;
+  for (int j = 0; j < 5; j++) {
+    vec4 sl = uLyrSlots[j];
+    if (sl.y <= 0.002) continue;
+    float dy = (fc.y - (uLyrBox.w + sl.x)) / uLyrSlotPx;            // -0.5 … 0.5 inside the slot
+    if (abs(dy) > 0.5) continue;
+    float a = texture(uLyr, vec2(u, (float(j) + 0.5 - dy) / 5.0)).a;
+    vec3 col = mix(uLyrInk, uLyrAccent, sl.z);
+    acc += vec4(col, 1.0) * a * sl.y * (1.0 - acc.a);
   }
   return acc;
 }
@@ -210,7 +199,8 @@ void main() {
   if (uLyrOn > 0.0) {
     vec4 ly = lyricsLayer(gl_FragCoord.xy);
     float lum = dot(c, vec3(0.299, 0.587, 0.114));
-    float behind = mix(1.0, 1.0 - smoothstep(0.08, 0.42, lum), uLyrOcc);
+    float halo = dot(texture(uBloom, uv).rgb, vec3(0.299, 0.587, 0.114)) * 2.5;   // blurred bright shapes: a soft gap around them
+    float behind = mix(1.0, 1.0 - smoothstep(0.06, 0.32, max(lum, halo)), uLyrOcc);
     c = c * (1.0 - ly.a * behind * uLyrOn) + ly.rgb * behind * uLyrOn;
   }
   // rest (pause in the song): colours soften and the picture breathes slowly (no brightness jump)

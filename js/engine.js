@@ -200,7 +200,7 @@ export class Engine {
     const P = f.pal, c01 = (a) => a.map((v) => v / 255);
     const lift = (a, k) => a.map((v) => v + (1 - v) * k);
     const ink = ly?.ink || lift(c01(P?.mid || [200, 200, 200]), 0.78);
-    const accent = ly?.accent || lift(c01(P?.hi || [255, 200, 120]), 0.18);
+    const accent = ly?.accent || ink.map((v, i) => v * 0.5 + lift(c01(P?.hi || [255, 200, 120]), 0.3)[i] * 0.5);   // a muted cover tint
     // final
     const bloomAmt = (this.cur.vis.bloom ?? 0.9) * ease + (this.old ? (this.old.vis.bloom ?? 0.9) * (1 - ease) : 0);
     this.#pass(this.post.final, null, (u) => {
@@ -211,8 +211,9 @@ export class Engine {
       u.f("uLyrOn", ly ? this.lyrOn : 0);
       if (ly) {
         u.tex("uLyr", this.lyrTex, 6);
-        u.f("uLyrOcc", ly.occlude);
-        u.v4("uLyrWall", ...ly.wall); u.v4("uLyrAtlas", ...ly.atlas); u.v4("uLyrBig", ...ly.big);
+        u.f("uLyrOcc", ly.occlude); u.f("uLyrSlotPx", ly.slotPx);
+        u.v4("uLyrBox", ...ly.box);
+        u.v4a("uLyrSlots", ly.slots);
         u.v3("uLyrInk", ...ink); u.v3("uLyrAccent", ...accent);
       }
     });
@@ -269,6 +270,7 @@ export class Engine {
       v2: (n, x, y) => L[n] && gl.uniform2f(L[n], x, y),
       v3: (n, x, y, z) => L[n] && gl.uniform3f(L[n], x, y, z),
       v4: (n, x, y, z, w) => L[n] && gl.uniform4f(L[n], x, y, z, w),
+      v4a: (n, arr) => L[n] && gl.uniform4fv(L[n], arr),
       tex: (n, t, unit) => { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t); if (L[n]) gl.uniform1i(L[n], unit); },
     };
     if (L.uRes) gl.uniform2f(L.uRes, w, h);

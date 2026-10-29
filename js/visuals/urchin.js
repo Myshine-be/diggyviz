@@ -12,7 +12,7 @@ const states = new WeakMap();
 export default {
   id: "urchin",
   name: "Urchin",
-  lyrics: { y: 0.13, big: 0.2, font: "light" },   // the sung line under the ball; the wall fills the background
+  lyrics: { land: { x: 0.03, y: 0.5, align: "left", width: 0.22 }, port: { y: 0.12 }, font: "light" },   // beside / under the ball, never over it
   bloom: 0.35,
 
   uniforms({ gl, loc, frame }) {

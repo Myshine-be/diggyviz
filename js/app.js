@@ -31,7 +31,8 @@ let tempo = { bpm: 120, off: 0 };
 let drop = 0;
 const lyrics = createLyrics();   // synced lyrics (fetched only while the lyrics layer is on or Orbit is on screen)
 const lyricsLayer = createLyricsLayer();
-let lyricsOn = store.get("lyrics", true);   // the lyrics layer behind the visuals (⚙ or key L)
+let lyricsOn = store.get("lyrics", true);   // the lyrics layer behind the visuals (⚙, the button or key L)
+let lyricsMode = store.get("lyricsStyle", "lines");   // "lines" (sung line + neighbours) or "one" (only the sung line)
 let songsPlayed = store.get("snakeSongs", 0);   // how many songs DiggyViz has seen (Snake grows with them)
 let palCur = clonePal(DEFAULT_PAL), palTarget = clonePal(DEFAULT_PAL);
 let source = null, sourceName = store.get("source", null);
@@ -299,7 +300,7 @@ function lyricsFrame(visual, pos) {
   if (!want) return { layer: null, orbit: null };
   const lines = lyrics.linesFor(track);
   if (orbit) return { layer: null, orbit: { id: track.id, lines, posMs: pos } };
-  return { orbit: null, layer: lyricsLayer.frame({ lines, sec: pos / 1000, posKnown: !track.approx, id: track.id, style: visual.lyrics, W: engine?.W || innerWidth, H: engine?.H || innerHeight }) };
+  return { orbit: null, layer: lyricsLayer.frame({ lines, sec: pos / 1000, posKnown: !track.approx, id: track.id, style: visual.lyrics, mode: lyricsMode, W: engine?.W || innerWidth, H: engine?.H || innerHeight }) };
 }
 function setLyrics(on) {
   lyricsOn = on; store.set("lyrics", on);
@@ -397,6 +398,8 @@ $("autoChk").addEventListener("change", (e) => setAuto(e.target.checked));
 $("lyricsChk").checked = lyricsOn;
 $("lyricsChk").addEventListener("change", (e) => setLyrics(e.target.checked));
 $("lyricsBtn").setAttribute("aria-pressed", String(lyricsOn));
+$("lyricsStyleSel").value = lyricsMode;
+$("lyricsStyleSel").addEventListener("change", (e) => { lyricsMode = e.target.value === "one" ? "one" : "lines"; store.set("lyricsStyle", lyricsMode); });
 $("lyricsBtn").addEventListener("click", (e) => { e.stopPropagation(); setLyrics(!lyricsOn); });
 
 /* own music (like a PSP): DiggyViz plays the files and analyses the same sound */

@@ -7,7 +7,7 @@
 export default {
   id: "tunnel",
   name: "Tunnel",
-  lyrics: { y: 0.5, font: "light" },     // in the dark open passage, behind the walls
+  lyrics: { land: { y: 0.14 }, port: { y: 0.1 }, font: "light" },   // low, far from the opening
   bloom: 0.55,
   frag: /* glsl */ `
 void main() {

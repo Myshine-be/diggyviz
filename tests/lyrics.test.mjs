@@ -120,28 +120,40 @@ test('long lines wrap into two balanced rows', () => {
   assert.deepEqual(wrapLine('aaaa bbbb cccc dddd', m, 120), ['aaaa bbbb', 'cccc dddd']);
 });
 
-// ---- 3.0.1: full-screen lyrics wall ----
-import { wallLayout, wallScroll } from '../js/lyrics-layer.js';
+// ---- 3.0.2: one calm block ----
+import { blockLayout, LYRIC_ALPHA, SLOTS, CENTER } from '../js/lyrics-layer.js';
 
-test('the wall lays all lines out as flowing rows and knows where each line starts', () => {
-  const m = (t) => t.length * 10;
-  const { rows, lineRow } = wallLayout(['AAAA BBBB', 'CCCC', 'DDDD EEEE FFFF'], m, 120);
-  assert.ok(rows.every((r) => m(r) <= 120 || !r.includes(' ')));
-  assert.equal(rows[rows.length - 1], '·');                       // a separator closes the loop
-  assert.equal(lineRow.length, 3);
-  assert.ok(lineRow[0] <= lineRow[1] && lineRow[1] <= lineRow[2]);
-  assert.ok(rows[lineRow[2]].includes('DDDD') || rows[lineRow[2] - 1].includes('DDDD') || rows[lineRow[2]].startsWith('DDDD'));
+test('the block: sung line marked only by opacity/tint, neighbours soft, nothing else shown', () => {
+  const rows = [1, 1, 1, 1, 1];
+  const L = blockLayout(rows, { cur: 2, glide: 1, emph: 1 }, 20, 8, 3);
+  assert.equal(L.length, SLOTS);
+  assert.equal(L[CENTER].a, LYRIC_ALPHA.cur); assert.equal(L[CENTER].y, 0); assert.equal(L[CENTER].tint, 1);
+  assert.equal(L[CENTER - 1].a, LYRIC_ALPHA.near); assert.equal(L[CENTER + 1].a, LYRIC_ALPHA.near);
+  assert.equal(L[0].a, 0); assert.equal(L[4].a, 0);                       // at most one line before and after
+  assert.ok(L[CENTER - 1].y > 0 && L[CENTER + 1].y < 0);                 // past above, next below
+  assert.ok(LYRIC_ALPHA.cur <= 0.5 && LYRIC_ALPHA.near <= 0.15);
+  const one = blockLayout(rows, { cur: 2, glide: 1, emph: 1 }, 20, 8, 1);
+  assert.equal(one[CENTER - 1].a, 0); assert.equal(one[CENTER + 1].a, 0);   // "Eén zin"
 });
 
-test('the wall scroll follows the real position: rests on the line, glides to the next, continuous over gaps, no jumps', () => {
-  const lines = parseLRC('[00:01.00]one\n[00:05.00]two\n[00:09.00]\n[00:12.00]three');
-  const show = [0, 1, 3], lineRow = [0, 2, 5];
-  assert.equal(wallScroll(lines, show, lineRow, 2), 0);
-  assert.equal(wallScroll(lines, show, lineRow, 4.5), 0);           // still resting just before the glide
-  const mid = wallScroll(lines, show, lineRow, 4.75);
-  assert.ok(mid > 0 && mid < 2);
-  assert.equal(wallScroll(lines, show, lineRow, 5), 2);
-  assert.equal(wallScroll(lines, show, lineRow, 10), 2);            // gap: stays on the last sung line
-  let prev = wallScroll(lines, show, lineRow, 0);
-  for (let t = 0; t < 14; t += 1 / 60) { const s = wallScroll(lines, show, lineRow, t); assert.ok(s - prev >= -1e-9 && s - prev < 0.25); prev = s; }
+test('a new line: the block slides up one line and the opacities flow over, without jumps', () => {
+  const rows = [1, 2, 1, 1, 1];
+  let prev = null;
+  for (let g = 0; g <= 1.0001; g += 0.05) {
+    const L = blockLayout(rows, { cur: 2, glide: Math.min(1, g), emph: 1 }, 20, 8, 3);
+    if (prev) for (let j = 0; j < SLOTS; j++) { assert.ok(Math.abs(L[j].y - prev[j].y) < 6); assert.ok(Math.abs(L[j].a - prev[j].a) < 0.05); }
+    prev = L;
+  }
+  const start = blockLayout(rows, { cur: 2, glide: 0, emph: 1 }, 20, 8, 3);
+  assert.equal(start[CENTER - 1].y, 0); assert.equal(start[CENTER - 1].a, LYRIC_ALPHA.cur);   // starts where the old line was
+});
+
+test('no current line (gap, before the first line): only quiet text, no marking', () => {
+  const L = blockLayout([1, 1, 1, 1, 1], { cur: -1, glide: 1, emph: 0 }, 20, 8, 3);
+  assert.ok(L.every((l) => l.tint === 0 && l.a <= LYRIC_ALPHA.none));
+});
+
+test('a neighbour that needs more than 3 rows is left out (the visual gets the space)', () => {
+  const L = blockLayout([1, 5, 1, 1, 1], { cur: 2, glide: 1, emph: 1 }, 20, 8, 3);
+  assert.equal(L[CENTER - 1].a, 0); assert.equal(L[CENTER + 1].a, LYRIC_ALPHA.near);
 });
