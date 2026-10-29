@@ -25,7 +25,7 @@ const SPEED = 0.9;   // world units per second of visual time (slows down by its
 export default {
   id: "landscape",
   name: "Dunes",
-  lyrics: { y: { land: 0.83, port: 0.78 }, span: 1, scale: 0.85, font: "serif", occlude: false, ink: [0.97, 0.91, 0.8], accent: [1.0, 0.8, 0.52] },   // in the desert sky, never on the dunes
+  lyrics: { y: { land: 0.8, port: 0.76 }, big: { land: 0.2, port: 0.16 }, region: { land: [0.6, 1], port: [0.5, 1] }, font: "serif", occlude: false, ink: [0.97, 0.91, 0.8], accent: [1.0, 0.8, 0.52] },   // in the desert sky, never on the dunes
   bloom: 0.45,
 
   uniforms({ gl, loc, frame }) {

@@ -6,7 +6,7 @@
 export default {
   id: "spectrum",
   name: "Spectrum",
-  lyrics: { y: 0.87, span: 1 },          // above the bars
+  lyrics: { y: 0.86, big: 0.2 },          // the sung line above the bars
   bloom: 0.75,
   frag: /* glsl */ `
 const float N = 24.0;          // columns (per side when mirrored)

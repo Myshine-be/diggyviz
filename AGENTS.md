@@ -220,11 +220,17 @@ App 0.1.1+ clears the HTTP cache at start and reloads with F5 / Ctrl+R (GitHub P
   before the first line or in empty (instrumental) LRC lines. Slide only on a normal step to the next line; seek/pause/
   gap → correct at once. Lines belong to a track id: a new song removes the old text immediately, late answers are never
   shown. Word highlight only with real `<mm:ss.xx>` word stamps — never invent word timing (Orbit no longer does).
-  Atlas: js/lyrics-layer.js (regular + bold columns with IDENTICAL size/wrapping — lesson: different sizes left a ghost
-  of the regular text around the bold line). Final pass: text only where the picture is dark (= behind the visual);
-  `occlude:false` for Dunes' sky. Texture unit 6 is the engine's. Toggle: `rv.lyrics`, ⚙, key L. Only artist/title/
-  duration go to LRCLIB (tested: no auth header, no token, no cookies). Visuals place it with
-  `lyrics: { y | {land, port}, span, scale, font: sans|light|mono|serif, occlude, ink, accent }` or `lyrics: false`.
+  3.0.1 look (Mo: "vullend, niet gecentreerd"): a full-screen WALL of the song's lyrics (uppercase, dimmed, wraps
+  around so the screen is always full, scrolls with `wallScroll()`: rests on the sung line, glides in the 0.5 s before
+  the next one) + the sung line LARGE and bright on top (accent colour, 1–3 balanced rows, cross-fade A/B slots).
+  js/lyrics-layer.js redraws its canvas only when the window of rows or the line changes. Final pass: text only where
+  the picture is dark (= behind the visual); `occlude:false` + `region` keep Dunes' text in the sky. Old text fades out
+  in 0.2 s on a new song (a hard cut gave a 4 % luminance step). Texture unit 6 is the engine's. Toggle: the lyrics
+  button next to the gear (`#lyricsBtn`), ⚙ checkbox, key L (`rv.lyrics`). Only artist/title/duration go to LRCLIB
+  (tested: no auth header, no token, no cookies). Visuals place it with
+  `lyrics: { y, big, region (each may be {land, port}), font: sans|light|mono|serif, occlude, ink, accent }` or `false`.
+  Lesson: replacing a block of FINAL_FRAG once deleted `h()`/`aces()` and the whole engine failed to start — after
+  touching glsl.js always load the page (or tests/browser.mjs) and check `diggy.engine`.
 - **Snake:** body = bundle of 6 fine lines along the path (quarter circles in corners, continuous arc length
   `s = k − 0.5 + u`), head = lows (broad), tail = highs (fine), bounded ≤ 0.44 cell, converging lines normalised.
 - **Soul Beat:** ink in a glass sphere (no white disc). No centre mechanism: masses on own paths at 0.36–0.62 of the

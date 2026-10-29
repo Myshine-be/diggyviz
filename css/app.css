@@ -161,3 +161,9 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .deskbtn.close:hover { background: #c42b1c; color: #fff; }
 html.desktop .hud-top { top: 34px; }
 .app.idle .deskbar { transform: translateY(-8px); }
+
+/* lyrics on/off (3.0.1): next to the gear, visible like the other top controls */
+.hud-top .icon.lyr { margin-left: auto; }
+.hud-top .icon.lyr + #settingsBtn { margin-left: 8px; }
+.icon.lyr[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.icon.lyr[aria-pressed="false"] { opacity: 0.75; }

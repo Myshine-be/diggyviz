@@ -161,40 +161,42 @@ void main() {
 export const FINAL_FRAG = /* glsl */ `#version 300 es
 precision highp float;
 uniform sampler2D uScene, uBloom; uniform vec2 uRes; uniform float uBloomAmt, uTime, uGrain, uGrade, uRest;
-// lyrics layer (js/lyrics-layer.js): atlas of 8 slots, left half regular / right half bold weight
-uniform sampler2D uLyr; uniform float uLyrOn, uLyrY, uLyrGlide, uLyrEmph, uLyrHasCur, uLyrOcc, uLyrSpan, uLyrScale;
-uniform vec2 uLyrWord; uniform vec3 uLyrInk, uLyrAccent;
+// lyrics layer (js/lyrics-layer.js): a full-screen wall of the song's lyrics (dimmed) + the sung line large on top
+uniform sampler2D uLyr; uniform float uLyrOn, uLyrOcc;
+uniform vec4 uLyrWall;   // rows on screen, row offset in the texture, region bottom, region top (0..1 of the screen)
+uniform vec4 uLyrAtlas;  // wall height, big-slot height (fractions of the texture), texture px per screen px
+uniform vec4 uLyrBig;    // centre y, height (fraction of the screen), current alpha, previous alpha
+uniform vec3 uLyrInk, uLyrAccent;
 out vec4 fragColor;
-// premultiplied text colour + coverage at this pixel. The current line stands still at uLyrY; on a new line the
-// whole stack slides up one row (uLyrGlide 0→1). Past lines above, coming lines below, both quieter.
+float h(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
+// premultiplied text colour + coverage at this pixel
 vec4 lyricsLayer(vec2 fc) {
-  float sw = min(0.92 * uRes.x, 1.45 * uRes.y) * uLyrScale, sh = sw / 8.0, gap = sh * 0.9;
-  float x = (fc.x - 0.5 * uRes.x) / sw + 0.5;
+  vec2 uv = fc / uRes;
   vec4 acc = vec4(0.0);
-  for (int j = 0; j < 8; j++) {
-    float rel = float(j) - 3.0 + (1.0 - uLyrGlide);                  // 0 = the current line's place
-    float fade = 1.0 - smoothstep(uLyrSpan, uLyrSpan + 1.0, abs(rel));   // at most uLyrSpan lines above and below
-    if (fade <= 0.0) continue;
-    float em = (1.0 - smoothstep(0.0, 1.0, abs(rel))) * uLyrHasCur * uLyrEmph;
-    float sc = mix(0.8, 1.0, em);
-    float yc = uLyrY * uRes.y - rel * gap;
-    vec2 q = vec2((x - 0.5) / sc + 0.5, (fc.y - yc) / (sh * sc));
-    if (abs(q.y) > 0.5 || q.x < 0.0 || q.x > 1.0) continue;
-    float v = (float(j) + 0.5 - q.y) / 8.0;
-    float a0 = texture(uLyr, vec2(q.x * 0.5, v)).a, a1 = texture(uLyr, vec2(0.5 + q.x * 0.5, v)).a;
-    float bold = em;
-    if (uLyrWord.y >= 0.0) bold *= step(q.x, uLyrWord.y);          // real word timestamps only
-    float a = mix(a0, a1, bold);
-    float quiet = rel < 0.0 ? 0.26 : 0.38;                            // past lines quieter than the next one
-    quiet *= 1.0 - 0.45 * smoothstep(1.0, 2.0, abs(rel));
-    float op = mix(quiet, 1.0, bold) * fade;
-    vec3 col = mix(uLyrInk, uLyrAccent, bold) * mix(0.85, 1.15, bold);
-    acc += vec4(col, 1.0) * a * op * (1.0 - acc.a);
+  // the wall: rows from the top of its region, gently quieter above the sung line than below it
+  float rb = uLyrWall.z, rt = uLyrWall.w;
+  if (uv.y > rb && uv.y < rt) {
+    float rowF = (rt - uv.y) / (rt - rb) * uLyrWall.x + uLyrWall.y;   // row inside the texture window
+    float v = rowF * (uLyrAtlas.x / (uLyrWall.x + 4.0));     // nWin = rows on screen + 4
+    float a = texture(uLyr, vec2(uv.x, v)).a;
+    float past = smoothstep(uLyrBig.x + 0.02, uLyrBig.x + 0.25, uv.y);   // rows above the sung line are past lines
+    float edge = smoothstep(rb, rb + 0.04, uv.y) * smoothstep(rt, rt - 0.04, uv.y);
+    float op = mix(0.2, 0.12, past) * edge;
+    acc = vec4(uLyrInk, 1.0) * a * op;
+  }
+  // the sung line, large and bright, cross-fading to the next one
+  float bw = 0.92 * uRes.x, bh = uLyrBig.y * uRes.y;
+  vec2 q = vec2((fc.x - 0.5 * uRes.x) / bw + 0.5, (uLyrBig.x * uRes.y - fc.y) / bh + 0.5);
+  if (q.x > 0.0 && q.x < 1.0 && q.y > 0.0 && q.y < 1.0) {
+    float aC = texture(uLyr, vec2(q.x, uLyrAtlas.x + q.y * uLyrAtlas.y)).a * uLyrBig.z;
+    float aP = texture(uLyr, vec2(q.x, uLyrAtlas.x + (1.0 + q.y) * uLyrAtlas.y)).a * uLyrBig.w;
+    float a = max(aC, aP);
+    acc = acc * (1.0 - a) + vec4(uLyrAccent * 1.12, 1.0) * a;
   }
   return acc;
 }
-float h(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
-vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
+
 void main() {
   vec2 uv = gl_FragCoord.xy / uRes;
   vec3 c = texture(uScene, uv).rgb + texture(uBloom, uv).rgb * uBloomAmt;

@@ -10,7 +10,7 @@
 export default {
   id: "soulbeat",
   name: "Soul Beat",
-  lyrics: { y: 0.11, font: "light" },
+  lyrics: { y: 0.12, big: 0.2, font: "light" },
   bloom: 0.22,
   caption: true,
   frag: /* glsl */ `

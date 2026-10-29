@@ -1,3 +1,9 @@
+# HANDOFF — DiggyViz 3.0.1 (live, 29 oktober 2026)
+- Songtekstlaag op Mo's vraag schermvullend gemaakt ("Gemengd"): een gedimde tekstmuur van het hele nummer van rand tot
+  rand + de gezongen regel groot en fel erop. Zie AGENTS.md § 3.0 voor het ontwerp.
+- Nieuwe knop naast het tandwiel (`#lyricsBtn`) zet de songteksten aan/uit (zelfde als ⚙ en toets L).
+- Oude tekst vervaagt in 0,2 s bij een nieuw nummer (geen harde sprong).
+
 # HANDOFF — DiggyViz 3.0.0 (live sinds 29 oktober 2026)
 
 Mo's 3.0-briefing is volledig uitgewerkt (Claude, 29 oktober 2026) en op Mo's vraag live gezet (`main`). Alle 108 unit-tests en de browsertest (12 visuals compileren) slagen.

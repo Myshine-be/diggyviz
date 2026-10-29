@@ -183,8 +183,11 @@ export class Engine {
     this.#pass(this.post.blur, this.bloomB, (u) => { u.tex("uSrc", this.bloomA.tex, 0); u.v2("uDir", 2 / this.BW, 0); });
     this.#pass(this.post.blur, this.bloomA, (u) => { u.tex("uSrc", this.bloomB.tex, 0); u.v2("uDir", 0, 2 / this.BH); });
     // lyrics layer: removed at once (track change, no lyrics), fades in softly when lines appear
-    const ly = f.lyricLayer;
-    if (ly) {
+    // a new song / no lyrics: the old text leaves within 0.2 s (a soft fade, so nothing jumps), never longer
+    let ly = f.lyricLayer;
+    if (!ly && this.lyrLast && this.lyrOn > 0) { ly = this.lyrLast; this.lyrOn = Math.max(0, this.lyrOn - f.dt / 0.2); if (this.lyrOn === 0) this.lyrLast = null; }
+    else if (ly) this.lyrLast = ly;
+    if (ly && ly === f.lyricLayer) {
       if (ly.version !== this.lyrVersion || ly.canvas !== this.lyrCanvas) {
         this.lyrVersion = ly.version; this.lyrCanvas = ly.canvas;
         gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, this.lyrTex);
@@ -193,7 +196,7 @@ export class Engine {
       }
       if (this.lyrVis !== this.cur.vis.id) { this.lyrVis = this.cur.vis.id; this.lyrOn = 0; }   // new visual: new placement, fade in
       this.lyrOn = Math.min(1, this.lyrOn + f.dt / 0.35);
-    } else this.lyrOn = 0;
+    } else if (!ly) this.lyrOn = 0;
     const P = f.pal, c01 = (a) => a.map((v) => v / 255);
     const lift = (a, k) => a.map((v) => v + (1 - v) * k);
     const ink = ly?.ink || lift(c01(P?.mid || [200, 200, 200]), 0.78);
@@ -208,8 +211,9 @@ export class Engine {
       u.f("uLyrOn", ly ? this.lyrOn : 0);
       if (ly) {
         u.tex("uLyr", this.lyrTex, 6);
-        u.f("uLyrY", typeof ly.y === "object" ? (this.W >= this.H ? ly.y.land : ly.y.port) : ly.y); u.f("uLyrGlide", ly.glide); u.f("uLyrEmph", ly.emph); u.f("uLyrHasCur", ly.hasCur); u.f("uLyrOcc", ly.occlude); u.f("uLyrSpan", ly.span ?? 2); u.f("uLyrScale", ly.scale ?? 1);
-        u.v2("uLyrWord", ly.word[0], ly.word[1]); u.v3("uLyrInk", ...ink); u.v3("uLyrAccent", ...accent);
+        u.f("uLyrOcc", ly.occlude);
+        u.v4("uLyrWall", ...ly.wall); u.v4("uLyrAtlas", ...ly.atlas); u.v4("uLyrBig", ...ly.big);
+        u.v3("uLyrInk", ...ink); u.v3("uLyrAccent", ...accent);
       }
     });
   }
@@ -264,6 +268,7 @@ export class Engine {
       f: (n, v) => L[n] && gl.uniform1f(L[n], v),
       v2: (n, x, y) => L[n] && gl.uniform2f(L[n], x, y),
       v3: (n, x, y, z) => L[n] && gl.uniform3f(L[n], x, y, z),
+      v4: (n, x, y, z, w) => L[n] && gl.uniform4f(L[n], x, y, z, w),
       tex: (n, t, unit) => { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t); if (L[n]) gl.uniform1i(L[n], unit); },
     };
     if (L.uRes) gl.uniform2f(L.uRes, w, h);

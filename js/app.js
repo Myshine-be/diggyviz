@@ -299,11 +299,12 @@ function lyricsFrame(visual, pos) {
   if (!want) return { layer: null, orbit: null };
   const lines = lyrics.linesFor(track);
   if (orbit) return { layer: null, orbit: { id: track.id, lines, posMs: pos } };
-  return { orbit: null, layer: lyricsLayer.frame({ lines, sec: pos / 1000, posKnown: !track.approx, id: track.id, style: visual.lyrics }) };
+  return { orbit: null, layer: lyricsLayer.frame({ lines, sec: pos / 1000, posKnown: !track.approx, id: track.id, style: visual.lyrics, W: engine?.W || innerWidth, H: engine?.H || innerHeight }) };
 }
 function setLyrics(on) {
   lyricsOn = on; store.set("lyrics", on);
   $("lyricsChk").checked = on;
+  $("lyricsBtn").setAttribute("aria-pressed", String(on));
   status(on ? "Songteksten aan" : "Songteksten uit");
 }
 
@@ -395,6 +396,8 @@ if (!isDesktop() && listener.supported && store.get("listen", false)) {
 $("autoChk").addEventListener("change", (e) => setAuto(e.target.checked));
 $("lyricsChk").checked = lyricsOn;
 $("lyricsChk").addEventListener("change", (e) => setLyrics(e.target.checked));
+$("lyricsBtn").setAttribute("aria-pressed", String(lyricsOn));
+$("lyricsBtn").addEventListener("click", (e) => { e.stopPropagation(); setLyrics(!lyricsOn); });
 
 /* own music (like a PSP): DiggyViz plays the files and analyses the same sound */
 function showPlayer() {

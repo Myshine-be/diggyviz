@@ -119,3 +119,29 @@ test('long lines wrap into two balanced rows', () => {
   assert.deepEqual(wrapLine('short', m, 200), ['short']);
   assert.deepEqual(wrapLine('aaaa bbbb cccc dddd', m, 120), ['aaaa bbbb', 'cccc dddd']);
 });
+
+// ---- 3.0.1: full-screen lyrics wall ----
+import { wallLayout, wallScroll } from '../js/lyrics-layer.js';
+
+test('the wall lays all lines out as flowing rows and knows where each line starts', () => {
+  const m = (t) => t.length * 10;
+  const { rows, lineRow } = wallLayout(['AAAA BBBB', 'CCCC', 'DDDD EEEE FFFF'], m, 120);
+  assert.ok(rows.every((r) => m(r) <= 120 || !r.includes(' ')));
+  assert.equal(rows[rows.length - 1], '·');                       // a separator closes the loop
+  assert.equal(lineRow.length, 3);
+  assert.ok(lineRow[0] <= lineRow[1] && lineRow[1] <= lineRow[2]);
+  assert.ok(rows[lineRow[2]].includes('DDDD') || rows[lineRow[2] - 1].includes('DDDD') || rows[lineRow[2]].startsWith('DDDD'));
+});
+
+test('the wall scroll follows the real position: rests on the line, glides to the next, continuous over gaps, no jumps', () => {
+  const lines = parseLRC('[00:01.00]one\n[00:05.00]two\n[00:09.00]\n[00:12.00]three');
+  const show = [0, 1, 3], lineRow = [0, 2, 5];
+  assert.equal(wallScroll(lines, show, lineRow, 2), 0);
+  assert.equal(wallScroll(lines, show, lineRow, 4.5), 0);           // still resting just before the glide
+  const mid = wallScroll(lines, show, lineRow, 4.75);
+  assert.ok(mid > 0 && mid < 2);
+  assert.equal(wallScroll(lines, show, lineRow, 5), 2);
+  assert.equal(wallScroll(lines, show, lineRow, 10), 2);            // gap: stays on the last sung line
+  let prev = wallScroll(lines, show, lineRow, 0);
+  for (let t = 0; t < 14; t += 1 / 60) { const s = wallScroll(lines, show, lineRow, t); assert.ok(s - prev >= -1e-9 && s - prev < 0.25); prev = s; }
+});
