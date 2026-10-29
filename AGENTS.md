@@ -213,3 +213,38 @@ App 0.1.1+ clears the HTTP cache at start and reloads with F5 / Ctrl+R (GitHub P
   glides every 40 s: mirrored row → arch → ring → classic row.
 - **Dunes** (id `landscape`): new sound appears at the horizon and rolls towards the viewer; heights saturated and
   capped (~15 % of the screen); moons shared with Bloop.
+
+## 3.0 beta — visual review branch, not approved for deployment
+- Work is on `codex/finish-visuals-3.0`, based on Claude's `18c752c`. Do not merge/deploy until Mo approves the moving previews.
+- Shared lyrics: `lyrics-layer.js` builds a canvas atlas only on line/font/track changes; final-pass texture unit 6.
+  Playback position, never BPM, chooses the highlighted sentence. Unknown positions, demo tracks and missing synced
+  lyrics show no false active sentence. Real word stamps are optional. The layer tracks consecutive positions so
+  seek/pause/track changes settle immediately. `rv.lyrics`, Settings and L control it; Orbit retains its own globe.
+- Lyric styles may set `y` (number or `{land,port}`), font, ink, accent, occlude and `clip:[bottom,top]` (normalized
+  screen height). Dunes clips to [.66,.98] so even long/multiple lines cannot cover the sand.
+- Snake: game logic/head/apple/growth/reward unchanged. Eight thin strands follow straight cells and tangent quarter
+  circles. Signed transverse coordinates and `s + uFrac` keep shapes continuous through turns and cell reindexing.
+  The newest spectrum + local flux drives width immediately; a short historical component adds trailing detail.
+- Soul Beat: seven separate Chrome-inspired 3D paths, softly joined dark ink masses, localized stretch and droplets
+  inside a glass sphere. No shared centroid force, no white moon disc, no metallic highlights. 72 ray steps max.
+- Tunnel: analytic polar walls, soft far-distance fade/open aperture; no feedback emitter or changing centre polygon.
+  Camera motion is steady. The visual is retained for Mo's review, not automatically removed.
+- Dunes: shaded, asymmetric sand ridges, wind ripples, low sun and atmospheric distance. `dune-ridges.js` stores a
+  bounded history of measured hits in world space; close hits merge, a ridge grows over .8 s then keeps its shape.
+  A 512x1 R16F height profile on unit 4 feeds a height-field marcher (90 steps plus 4 refinements). Camera speed .22
+  world units/s is independent of audio. Local loose sand reacts immediately, while new dunes grow farther ahead.
+  Warm sand is a deliberate art direction; cover colours tint it. Soul Beat's neutral ink/glass is also intentional.
+- Urchin: `urchin-events.js` computes 420 lengths once per frame, uploads a nearest-filtered R32F texture on unit 4.
+  Low/high regions follow screen height. Connected low clusters are broad; upper sharp-hit clusters compact.
+  At most six live events; every third event adds a wave, never consecutive waves. Per-spike release .15–.45 s,
+  bounded length < .86 plus fixed core .46. No hit lighting or core pulse. Fresh hits override a lingering rest envelope.
+- Visual-owned textures: optional `dispose(gl,slot)` runs only when a slot is released, not on render-target resize.
+  Urchin/Dunes own state per slot, recreate invalid textures after context restoration, and leave no texture behind
+  when switching. Unit 6 is reserved for the shared lyric atlas; do not use it for visual-owned data.
+- `tests/visual-motion.test.mjs` checks spatial hit selection, bounded events, release across frame rates, immediate
+  return after silence, ridge growth/merging/persistence and steady camera speed. Browser tests cover GPU text and
+  data-texture restoration as well as the existing shader/audio/story regressions.
+- `tests/prepare-preview.mjs` and `tests/previews.mjs` are QA-only. The preview workflow uses a credited CC-BY Vibe Ace
+  excerpt with volume/EQ edits and inserted silence; production `processSpectrum` analyses it. Text in previews is
+  original test copy, not that instrumental track's lyrics. Software-rendered 480x270/270x480 videos at 24 fps do not
+  establish native iPhone performance, end-to-end sync latency or flash-safety certification.

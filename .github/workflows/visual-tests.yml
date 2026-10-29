@@ -20,7 +20,7 @@ jobs:
         run: node --test tests/*.test.mjs
       - name: Live tempo transport diagnostic (no credentials)
         run: node tests/deezer-probe.mjs
-      - name: Thirteen visuals, audio, story rewards and renderer lifecycle
+      - name: Twelve visuals, lyrics, audio, story rewards and renderer lifecycle
         run: node tests/browser.mjs
       - uses: actions/upload-artifact@v4
         if: always()

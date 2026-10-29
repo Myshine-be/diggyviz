@@ -1,3 +1,34 @@
+# Belangrijke standwijziging — 29 oktober 2026
+
+Claude heeft onafhankelijk deze visuele opdracht afgerond en 3.0.0/3.0.1 op `main` gepubliceerd.
+Actuele main bij deze controle: `7af6520`; de tekstmuur kwam in `d637a9c`.
+Deze Codex-branch bevat een **alternatieve uitwerking**, geen vervanger die over main heen mag worden gemerged.
+[PR #8](https://github.com/Myshine-be/diggyviz/pull/8) blijft draft voor vergelijking; integreer eventuele losse
+verbeteringen alleen na controle tegen het nieuwe main. Mo vraagt nu een prompt om de lyrics van 3.0.1 subtieler
+te maken. Zijn nieuwe prioriteit: visual altijd hoofdrol, geen tekstmuur, geen dubbele grote actuele zin.
+De huidige code van main is in deze ronde niet aangepast.
+
+---
+
+# Codex — afwerking 3.0 beta (28 oktober 2026)
+
+De zes onderdelen uit Mo's briefing zijn geïmplementeerd op `codex/finish-visuals-3.0`.
+Pull request: https://github.com/Myshine-be/diggyviz/pull/8 (draft, **niet live**).
+
+- Claudes songtekstlaag behouden, aangevuld met correcte overgang na seek/pauze, expliciete plaatsing op de overige
+  visuals en een afgebakend tekstgebied in de lucht bij Dunes.
+- Snake: doorlopende fijne strengen in plaats van blokken/LED's; spel en easter egg behouden.
+- Soul Beat: afzonderlijke, samenvloeiende inktmassa's in glas; geen centrale aantrekking of witte maanschijf.
+- Tunnel: open doorgang met analytische wanden; centrale symbolen verwijderd. Behouden ter beoordeling.
+- Dunes: belicht zandlandschap met blijvende beat-ruggen en constante, langzame camerabeweging.
+- Urchin: frequentiezones, individuele hersteltijden, verbonden clusters en reizende golven; geen hitflitsen.
+
+De actuele testresultaten, reviewgrenzen en previewlinks worden bijgehouden in `docs/review-3.0.md`.
+De eerdere overdracht hieronder is historische context, niet de actuele takenlijst.
+**Niet naar main of live vóór Mo's beoordeling.**
+
+---
+
 # HANDOFF — 3.0-briefing (branch `claude/visuals-3.0`, NIET live)
 
 Mo's briefing (songteksten + Snake/Soul Beat/Tunnel/Dunes/Urchin) is half af. Plan: zie onderaan. **Niets naar `main` vóór Mo's akkoord.**
