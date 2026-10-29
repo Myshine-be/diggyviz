@@ -208,7 +208,7 @@ export class Engine {
       u.f("uLyrOn", ly ? this.lyrOn : 0);
       if (ly) {
         u.tex("uLyr", this.lyrTex, 6);
-        u.f("uLyrY", typeof ly.y === "object" ? (this.W >= this.H ? ly.y.land : ly.y.port) : ly.y); u.f("uLyrGlide", ly.glide); u.f("uLyrEmph", ly.emph); u.f("uLyrHasCur", ly.hasCur); u.f("uLyrOcc", ly.occlude);
+        u.f("uLyrY", typeof ly.y === "object" ? (this.W >= this.H ? ly.y.land : ly.y.port) : ly.y); u.f("uLyrGlide", ly.glide); u.f("uLyrEmph", ly.emph); u.f("uLyrHasCur", ly.hasCur); u.f("uLyrOcc", ly.occlude); u.f("uLyrSpan", ly.span ?? 2); u.f("uLyrScale", ly.scale ?? 1);
         u.v2("uLyrWord", ly.word[0], ly.word[1]); u.v3("uLyrInk", ...ink); u.v3("uLyrAccent", ...accent);
       }
     });

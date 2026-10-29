@@ -162,18 +162,18 @@ export const FINAL_FRAG = /* glsl */ `#version 300 es
 precision highp float;
 uniform sampler2D uScene, uBloom; uniform vec2 uRes; uniform float uBloomAmt, uTime, uGrain, uGrade, uRest;
 // lyrics layer (js/lyrics-layer.js): atlas of 8 slots, left half regular / right half bold weight
-uniform sampler2D uLyr; uniform float uLyrOn, uLyrY, uLyrGlide, uLyrEmph, uLyrHasCur, uLyrOcc;
+uniform sampler2D uLyr; uniform float uLyrOn, uLyrY, uLyrGlide, uLyrEmph, uLyrHasCur, uLyrOcc, uLyrSpan, uLyrScale;
 uniform vec2 uLyrWord; uniform vec3 uLyrInk, uLyrAccent;
 out vec4 fragColor;
 // premultiplied text colour + coverage at this pixel. The current line stands still at uLyrY; on a new line the
 // whole stack slides up one row (uLyrGlide 0→1). Past lines above, coming lines below, both quieter.
 vec4 lyricsLayer(vec2 fc) {
-  float sw = min(0.92 * uRes.x, 1.45 * uRes.y), sh = sw / 8.0, gap = sh * 0.9;
+  float sw = min(0.92 * uRes.x, 1.45 * uRes.y) * uLyrScale, sh = sw / 8.0, gap = sh * 0.9;
   float x = (fc.x - 0.5 * uRes.x) / sw + 0.5;
   vec4 acc = vec4(0.0);
   for (int j = 0; j < 8; j++) {
     float rel = float(j) - 3.0 + (1.0 - uLyrGlide);                  // 0 = the current line's place
-    float fade = 1.0 - smoothstep(2.0, 3.0, abs(rel));               // at most 2 lines above and below
+    float fade = 1.0 - smoothstep(uLyrSpan, uLyrSpan + 1.0, abs(rel));   // at most uLyrSpan lines above and below
     if (fade <= 0.0) continue;
     float em = (1.0 - smoothstep(0.0, 1.0, abs(rel))) * uLyrHasCur * uLyrEmph;
     float sc = mix(0.8, 1.0, em);

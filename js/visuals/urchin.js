@@ -1,12 +1,34 @@
 // Urchin — a floating sphere covered in hundreds of spikes that shoot out with the music.
 // Spikes sit on a spherical Fibonacci lattice (inverse mapping after Keinert et al. / iq).
+// 3.0: every spike has its own sensitivity and recovery time; the frequency zones run from lows at the bottom to
+// highs at the top (as seen on screen); every measured hit drives ONE cluster (urchin-events.js): deep bass a broad
+// group that shoots far out, sharp hits a compact quick group, highs only fine local motion. Some clear hits send a
+// wave over the surface from their cluster. Big difference between rest and a strong hit, fast out, slower back,
+// always bounded (never clipped, also in portrait). No light or brightness pulses: only the spikes move.
+import { createUrchinEvents, stepUrchin, packEvents, MAXEV } from "./urchin-events.js";
+
+const states = new WeakMap();
 
 export default {
   id: "urchin",
   name: "Urchin",
   lyrics: { y: 0.12, font: "light" },   // under the ball, behind the spike tips
   bloom: 0.35,
+
+  uniforms({ gl, loc, frame }) {
+    let st = states.get(gl);
+    if (!st) { st = { ev: createUrchinEvents(), A: new Float32Array(MAXEV * 4), B: new Float32Array(MAXEV * 4), last: null }; states.set(gl, st); }
+    const t = frame.time ?? 0, dt = st.last === null ? 0 : Math.max(0, Math.min(0.1, t - st.last));
+    st.last = t;
+    stepUrchin(st.ev, frame.audio, dt);
+    packEvents(st.ev, st.A, st.B);
+    if (loc.uEvA) gl.uniform4fv(loc.uEvA, st.A);
+    if (loc.uEvB) gl.uniform4fv(loc.uEvB, st.B);
+  },
+
   frag: /* glsl */ `
+uniform vec4 uEvA[6];   // event direction (view space) + age in seconds
+uniform vec4 uEvB[6];   // strength, cluster radius (rad), wave 0/1, kind 0 bass / 1 sharp
 const float PHI = 1.61803398875;
 const float NSPIKES = 420.0;
 
@@ -57,25 +79,42 @@ mat3 orient() {
   return rx * ry;
 }
 
-// Each spike listens to its own pitch: neighbouring spikes share a frequency region, so a note lights up a
-// patch of the ball. On every kick a different ~30 % of the spikes shoots out, on every snare/clap another ~20 %.
-float spikeFreq(vec3 q, float id) { return clamp(noise3(q * 1.7 + uSeed * 0.013) * 1.25 - 0.12 + 0.08 * hash13(vec3(id, 7.3, 1.1)), 0.0, 1.0); }
-float kickSel(float id) { return step(hash13(vec3(id, uKickN, 3.7)), 0.30); }
-float snareSel(float id) { return step(hash13(vec3(id, uSnareN + 91.0, 5.1)), 0.20); }
+vec3 gUp; vec3 gEvDir[6];
 
+// Each spike: its own sensitivity, its own recovery time, a pitch from its height on screen (lows at the bottom,
+// highs at the top, with a soft noisy overlap). Hits act on clusters (events), not on every spike at once.
 float spikeLen(vec3 q, float id) {
-  float fq = spikeFreq(q, id);
-  float jitter = 0.85 + 0.3 * hash13(vec3(id, 1.7, 3.1));
-  float e = max(uEnergy, 0.12);
-  float raw = 0.10 + 0.22 * e
-            + 1.15 * pow(band(fq), 1.6) * e          // the level of its own pitch, with contrast
-            + 1.7 * flux(fq)                         // a new note there: shoot
-            + 2.7 * kickSel(id) * uKick              // kick group
-            + 2.0 * snareSel(id) * uSnare            // snare / clap group
-            + uDrop * 0.6;
-  // Smooth saturation keeps every tip inside the bounding sphere, even on a track change.
-  raw *= 1.0 - 0.75 * uRest;                              // a pause: the spikes withdraw
-  return 0.07 + 0.79 * (1.0 - exp(-raw * jitter));
+  float h1 = hash13(vec3(id, 1.7, 3.1)), h2 = hash13(vec3(id, 5.3, 0.7));
+  float sens = 0.6 + 0.8 * h1;
+  float tau = 0.15 + 0.30 * h2;                                  // neighbours recover at different speeds
+  float ys = dot(q, gUp);
+  float fq = clamp(0.5 + 0.42 * ys + 0.3 * (noise3(q * 2.2 + uSeed * 0.013) - 0.5), 0.0, 1.0);
+  // rest: short; the own pitch only stirs a little, highs make small local groups twitch
+  float raw = 0.06 + 0.22 * pow(band(fq), 1.8) * sens;
+  float grp = smoothstep(0.55, 0.75, noise3(q * 5.0 + vec3(0.0, uTime * 0.4, 0.0)));
+  raw += 0.55 * flux(fq) * sens * mix(0.25, 1.0, grp) * smoothstep(0.35, 0.7, fq);
+  for (int i = 0; i < 6; i++) {
+    float s = uEvB[i].x;
+    if (s <= 0.0) continue;
+    float age = uEvA[i].w, rad = uEvB[i].y, sharp = uEvB[i].w;
+    float cd = dot(q, gEvDir[i]);
+    if (cd < -0.2 && uEvB[i].z < 0.5) continue;               // far side of a cluster without wave: no effect
+    float ang = sqrt(max(0.0, 2.0 * (1.0 - cd))) * (1.0 + 0.08 * (1.0 - cd));   // cheap arc length (no acos)
+    float cl = exp(-pow(ang / rad, 2.0) * 2.0);
+    float att = smoothstep(0.0, mix(0.04, 0.025, sharp), age);   // fast out (the first cluster reacts at once)
+    float rel = exp(-age / (tau * mix(1.0, 0.7, sharp)));      // a little slower back, per spike
+    raw += s * mix(2.6, 1.7, sharp) * sens * cl * att * rel;
+    if (uEvB[i].z > 0.5) {                                      // a wave travelling over the surface from the cluster
+      float front = rad * 0.5 + age * mix(3.2, 4.5, sharp);
+      float ring = exp(-pow((ang - front) / 0.25, 2.0)) * step(rad * 0.4, ang);
+      raw += s * 1.3 * sens * ring * exp(-age / 0.7);
+    }
+  }
+  raw += uDrop * 0.4;
+  raw *= 1.0 - 0.75 * uRest;                                     // a pause: the spikes withdraw
+  float jitter = 0.85 + 0.3 * h2;
+  // smooth saturation keeps every tip inside the bounding sphere (R + 0.86 ≤ 1.40)
+  return 0.05 + 0.81 * (1.0 - exp(-raw * jitter));
 }
 
 float map(vec3 p) {
@@ -97,15 +136,17 @@ vec3 calcNormal(vec3 p) {
 
 void main() {
   vec2 p = P();
-  R = 0.46 + min(0.08, uKick * 0.03 + uDrop * 0.05);
-  // Max extent is R(0.54) + L(0.86) = 1.40; with a 0.37 half-FOV tangent that fits the
+  R = 0.5;                                                      // the ball itself stays calm
+  gUp = orient() * vec3(0.0, 1.0, 0.0);
+  for (int i = 0; i < 6; i++) gEvDir[i] = orient() * normalize(uEvA[i].xyz + vec3(0.0, 0.0, 1e-4));
+  // Max extent is R(0.50) + L(0.86) = 1.36 (< 1.40); with a 0.37 half-FOV tangent that fits the
   // portrait width from distance >= 4.03. 4.05 keeps the orb as large as possible.
   vec3 ro = vec3(0.0, 0.0, 4.05);
   vec3 rd = normalize(vec3(p, -1.35));
   mat3 o = orient();
   ro = o * ro; rd = o * rd;
 
-  vec3 bg = uPal[0] * 0.35 + pal(0.4) * 0.09 * exp(-dot(p, p) * 3.0) * (0.5 + uEnergy);
+  vec3 bg = uPal[0] * 0.35 + pal(0.4) * 0.09 * exp(-dot(p, p) * 3.0) * 0.9;
   vec3 col = bg;
 
   // bounding sphere
@@ -136,12 +177,12 @@ void main() {
       float ao = 1.0 - float(i) / 110.0;
       vec3 base = mix(uPal[0] * 0.4 + 0.01, uPal[1] * 0.75, smoothstep(0.0, 0.9, tip));
       col = base * (0.1 + 0.85 * dif) * (0.35 + 0.65 * ao);
-      col += mix(uPal[1], uPal[2], 0.25) * pow(tip, 3.0) * (0.25 + 0.45 * uEnergy);
+      col += mix(uPal[1], uPal[2], 0.25) * pow(tip, 3.0) * 0.45;   // steady: no brightness pulses
       col += uPal[1] * rim * 0.25 * tip;
       // no lighting on hits at all: only the spikes move (Mo: no flashes in Urchin)
     }
   }
-  col += uPal[1] * glow * (0.3 + 0.4 * uEnergy);
+  col += uPal[1] * min(glow, 0.6) * 0.45;                      // capped: longer spikes do not light up the picture
   fragColor = vec4(col, 1.0);
 }`,
 };
