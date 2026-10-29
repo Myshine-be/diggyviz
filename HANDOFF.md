@@ -1,7 +1,7 @@
 # HANDOFF — DiggyViz 3.0.0-beta (branch `claude/visuals-3.0`, NIET live)
 
 Mo's 3.0-briefing is **volledig uitgewerkt op de branch** (Claude, 29 oktober 2026). `main` en de live site zijn
-ongewijzigd: **pas mergen na Mo's akkoord** op de previews. Alle 113 unit-tests en de browsertest (12 visuals compileren) slagen.
+ongewijzigd: **pas mergen na Mo's akkoord** op de previews. Alle 108 unit-tests en de browsertest (12 visuals compileren) slagen.
 
 ## Wat er veranderde
 1. **Songtekstlaag achter elke visual** — `js/lyrics.js` (`lyricView`, echte woordstempels), `js/lyrics-layer.js`
