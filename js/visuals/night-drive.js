@@ -1,8 +1,10 @@
 // Snake (id stays "nightdrive" so saved choices and the story tests keep working) — the retro game, playing
-// itself on a glowing grid. The snake's body is a live equalizer: every segment is a frequency (bass at the head,
-// highs at the tail) and swells with it, and the sound ripples down the body. It grows by two segments with every
-// song DiggyViz has seen (after 120 it sheds its skin and starts small again). Two moves per beat, so it dances
-// on the tempo; during a pause in the song it stops and looks around. Easter egg at 90 s: a heart of apples.
+// itself on a glowing grid. The snake's body is a fluid equalizer: a bundle of fine lines (the Strings principle)
+// that follows its path through the cells, round in the corners, from head to tail. The head plays the lows (broad
+// swells), the tail the highs (fine fast ripples); a hit shows at once near the head and then ripples down the body.
+// Bounded so it never spills into a neighbouring cell; in silence it turns slim and calm. It grows by two segments
+// with every song DiggyViz has seen (after 120 it sheds its skin and starts small again). Two moves per beat, so it
+// dances on the tempo; during a pause in the song it stops and looks around. Easter egg at 90 s: a heart of apples.
 // Game logic: js/visuals/snake-path.js (pure, tested). The board is uploaded as a small texture each frame.
 import { createSnake, stepSnake, lengthForSongs, heartCells, placeApple } from "./snake-path.js";
 
@@ -80,9 +82,33 @@ int idxAt(vec2 c) {
   if (c.x < 0.0 || c.y < 0.0 || c.x >= uGrid.x || c.y >= uGrid.y) return 0;
   return int(texelFetch(uBoard, ivec2(c), 0).r * 255.0 + 0.5);
 }
-// the equalizer: segment k listens to frequency k/len; the sound ripples from the head down the body
-float level(float k) { float f = clamp((k - 1.0) / max(uLen - 1.0, 1.0), 0.0, 1.0); return histSmooth(f, 0.04 * k); }
-float halfW(float k) { return 0.19 + 0.29 * level(k); }
+// the body is a bundle of fine lines (the Strings principle) that follows the snake's path through the cells.
+// Frequencies are spread along the body: the head plays the lows (broad swells), the tail the highs (fine fast
+// ripples). The head reacts at once; the sound then ripples down the body. Bounded so it never leaves its cell.
+const int NLB = 6;
+vec2 nbDir(vec2 cell, int k) {                       // direction to the neighbour holding segment k, or 0
+  for (int n = 0; n < 4; n++) {
+    vec2 d = n == 0 ? vec2(1, 0) : n == 1 ? vec2(-1, 0) : n == 2 ? vec2(0, 1) : vec2(0, -1);
+    if (k > 0 && idxAt(cell + d) == k) return d;
+  }
+  return vec2(0.0);
+}
+// path coordinates inside a body cell: x = arc position u (0 at the headward edge … 1 at the tailward edge),
+// y = lateral offset (left of the head→tail direction). Straight cells are straight, corners a quarter circle.
+vec2 pathUV(vec2 lp, vec2 dPrev, vec2 dNext) {
+  if (dot(dPrev, dNext) < -0.5) {                    // straight
+    vec2 t = dNext;
+    return vec2(dot(lp, t) + 0.5, t.x * lp.y - t.y * lp.x);
+  }
+  vec2 C = (dPrev + dNext) * 0.5;                     // the shared cell corner
+  vec2 w = lp - C;
+  float r = length(w);
+  vec2 va = -dNext, vb = -dPrev;                      // radial directions at entry (A) and exit (B)
+  float u = atan(dot(w, vb), dot(w, va)) / (0.5 * PI);
+  vec2 tA = -dPrev, leftA = vec2(-tA.y, tA.x);
+  float sgn = dot(leftA, va);
+  return vec2(clamp(u, 0.0, 1.0), (r - 0.5) * sgn);
+}
 
 void main() {
   vec2 p = P();
@@ -106,47 +132,56 @@ void main() {
   col += pal(0.6) * (1.0 - smoothstep(0.0, px * 2.0, abs(frame))) * 0.8;
   col += pal(0.6) * exp(-abs(frame) * 60.0) * 0.12;
 
-  // body: rounded segments that swell with their frequency, bridged to their neighbours
-  float body = 1e3; float bk = 0.0;
-  int k0 = idxAt(cell);
-  if (k0 >= 2) {
-    float k = float(k0);
-    float w = halfW(k);
-    float tailShrink = k0 == int(uLen) ? (1.0 - uFrac) : 1.0;          // the tail slides out of its cell
-    body = sdBox(lp, vec2(w * mix(0.35, 1.0, tailShrink)), 0.12);
-    bk = k;
-    for (int n = 0; n < 4; n++) {
-      vec2 dir = n == 0 ? vec2(1, 0) : n == 1 ? vec2(-1, 0) : n == 2 ? vec2(0, 1) : vec2(0, -1);
-      int kn = idxAt(cell + dir);
-      if (kn >= 2 && abs(kn - k0) == 1) {
-        float wn = min(w, halfW(float(kn))) * 0.8;
-        body = min(body, sdBox(lp - dir * 0.25, vec2(abs(dir.x) > 0.5 ? 0.26 : wn, abs(dir.y) > 0.5 ? 0.26 : wn), 0.05));
-      }
-    }
-  }
-  // the neck reaches towards the head, which glides between cells
+  // body: a bundle of fine lines along the path (head and neck end under the head circle)
   vec2 headPos = mix(uHead.zw, uHead.xy, uFrac);
   vec2 hp = g - 0.5 - headPos;
-  float neckW = halfW(2.0) * 0.85;
-  float neck = sdSeg(g - 0.5, uHead.zw, headPos) - neckW;
   float headD = length(hp) - 0.42;
-  float bodyAll = min(body, neck);
-  float m = 1.0 - smoothstep(-aa, aa, bodyAll);
-  if (m > 0.0) {
-    float k = bk > 0.0 ? bk : 2.0;
-    float f = clamp((k - 1.0) / max(uLen - 1.0, 1.0), 0.0, 1.0);
-    float lv = level(k);
-    vec3 sc = pal(0.3 + 0.62 * f);
-    vec3 seg = sc * (0.28 + 0.55 * lv);                    // calm: colour, never white-hot
-    // LED meter inside each segment: a bar that fills with the level
-    // three LED dots across the segment light up with the level (like a tiny VU meter)
-    float leds = 0.0;
-    for (int j = 0; j < 3; j++) { float on = step(float(j) / 3.0 + 0.08, lv); leds += on * (1.0 - smoothstep(0.0, aa * 1.5, length(lp - vec2(0.0, (float(j) - 1.0) * 0.14)) - 0.045)); }
-    seg += mix(sc, vec3(1.0), 0.35) * leds * 0.45 * step(0.5, bk);
-    seg += vec3(1.0) * 0.05 * (1.0 - smoothstep(-0.1, 0.0, bodyAll));     // soft inner highlight
-    col = mix(col, seg, m);
+  int k0 = idxAt(cell);
+  if (k0 >= 1) {
+    vec2 dN = nbDir(cell, k0 + 1), dP = nbDir(cell, k0 - 1);
+    if (dot(dP, dP) < 0.5) dP = dot(dN, dN) > 0.5 ? -dN : -normalize(uHead.xy - uHead.zw + 1e-4);
+    if (dot(dN, dN) < 0.5) dN = -dP;
+    vec2 uv = pathUV(lp, dP, dN);
+    float s = float(k0) - 0.5 + uv.x;                 // arc length along the body, continuous over the cells
+    float sHead = 2.0 - uFrac, sTail = uLen - uFrac;
+    if (s >= sHead - 0.05 && s <= sTail + 0.05) {
+      float f = clamp((s - 1.0) / max(uLen - 1.0, 1.0), 0.0, 1.0);    // head = lows … tail = highs
+      float lag = min(1.4, 0.035 * max(s - sHead, 0.0));            // the sound ripples down the body
+      float lv = histSmooth(f, lag);
+      float on = flux(f) * (1.0 - smoothstep(0.0, 0.25, lag));      // a new hit shows at once near the head
+      float L = clamp(smoothstep(0.12, 0.8, lv) * 1.1 + 0.7 * on, 0.0, 1.4) * (1.0 - 0.7 * uRest);
+      float lowW = 1.0 - f, hiW = f;
+      float tail = smoothstep(sTail + 0.05, sTail - 1.6, s);          // pinched towards the tail
+      float headTaper = mix(0.75, 1.0, smoothstep(sHead, sHead + 1.0, s));
+      float env = tail * headTaper;
+      float t = uTime;
+      float spread = (0.09 + 0.22 * L * (0.3 + 0.7 * lowW)) * (1.0 - 0.3 * uRest);   // silence: slimmer, still there
+      float aaU = px / CS * 1.1;
+      vec3 acc = vec3(0.0); float cov = 0.0, sumL = 0.0;
+      for (int i = 0; i < NLB; i++) {
+        float kk = float(i) / float(NLB - 1) - 0.5;
+        float seed = kk * 2.4;
+        // broad swells from the lows (long wavelength), fine ripples from the highs (short wavelength, faster)
+        float y = kk * 2.0 * spread;
+        y += L * lowW * 0.26 * sin(TAU * (s * 0.32 - t * 0.35) + seed * 0.9);
+        y += L * (0.3 + hiW) * 0.09 * sin(TAU * (s * 1.7 + t * 1.25) + seed * 2.3);
+        y += 0.025 * sin(TAU * (s * 0.2 + t * 0.11) + seed);         // idle breathing: never a dead line
+        y = 0.44 * tanh(y * env / 0.44);                             // bounded: stays inside its own cell
+        float dy = abs(uv.y - y);
+        float w = 0.022 + 0.01 * L;
+        float l = 1.0 - smoothstep(w, w + aaU * 1.5, dy);
+        l += exp(-dy / (0.05 + aaU)) * 0.18;                         // a soft glow around each line
+        vec3 c = pal(0.3 + 0.62 * f + 0.08 * kk);
+        acc += c * l * mix(0.42, 0.72, clamp(L, 0.0, 1.0)) * mix(1.0, 0.7, abs(kk) * 2.0);
+        cov = max(cov, l); sumL += l;
+      }
+      acc /= max(1.0, sumL);                                         // converging lines never add up to a hot spot
+      float endFade = smoothstep(sTail + 0.05, sTail - 0.35, s) * smoothstep(sHead - 0.05, sHead + 0.1, s);
+      // a faint core keeps the snake readable as one body
+      float core = (1.0 - smoothstep(0.0, spread * env + 0.06, abs(uv.y))) * 0.14;
+      col = col * (1.0 - 0.55 * min(cov, 1.0) * endFade) + (acc + pal(0.3 + 0.62 * f) * core) * endFade;
+    }
   }
-  col += pal(0.4) * exp(-max(bodyAll, 0.0) * 18.0 / max(CS * 40.0, 0.5)) * 0.0;
 
   // apples (and the heart of apples in the easter egg); they pulse softly with the kick
   float ap = texelFetch(uBoard, ivec2(clamp(cell, vec2(0.0), uGrid - 1.0)), 0).g;
