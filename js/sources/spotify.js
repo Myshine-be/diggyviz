@@ -88,9 +88,10 @@ export async function usePairingCode(code) {
   store.set("clientId", c); store.set("tok", tok); refreshing = null;
 }
 
-export function createSpotifySource({ onTrack, onStatus }) {
+export function createSpotifySource({ onTrack, onStatus, onLink }) {
   let strikes = 0;
   return createPoller({
+    interval: 20000,
     onError: (e) => onStatus("Spotify: " + e.message, true),
     async run(signal) {
       const at = await accessToken();
@@ -99,15 +100,20 @@ export function createSpotifySource({ onTrack, onStatus }) {
       const r = await fetch("https://api.spotify.com/v1/me/player/currently-playing?additional_types=episode", { headers: { Authorization: "Bearer " + at }, signal });
       signal.throwIfAborted();
       if (r.status !== 429) strikes = 0;
-      if (r.status === 204) { onTrack(null); onStatus("Niets aan het spelen op Spotify"); return nextPoll({ status: 204 }); }
+      if (r.status === 204) { onTrack(null); onStatus("Spotify verbonden · er speelt niets"); onLink?.("ok"); return nextPoll({ status: 204 }); }
       else if (r.status === 401) {
         const tok = store.get("tok");
         if (tok?.access === at) { tok.exp = 0; store.set("tok", tok); }
         return 3000;
       } else if (r.status === 403) { onStatus("Spotify weigert: is je account toegevoegd bij User Management?", true); return 15000; }
       else if (r.status === 429) {
-        const wait = nextPoll({ status: 429, retryAfter: Number(r.headers.get("Retry-After")) || 0, strikes: strikes++ });
-        onStatus(`Spotify krijgt te veel aanvragen van deze app (alle gebruikers samen). Nieuwe poging over ${Math.round(wait / 1000)} s; de visuals lopen gewoon door.`);
+        let quota = false;
+        try { quota = /QUOTA_EXCEEDED/i.test(await r.text()); } catch {}
+        const wait = nextPoll({ status: 429, retryAfter: Number(r.headers.get("Retry-After")) || 0, strikes: strikes++, quota });
+        onStatus(quota
+          ? "Spotify: het dagquotum van deze app is op (alle gebruikers samen). Titel en hoes komen terug zodra Spotify het quotum vernieuwt; de visuals blijven op het geluid reageren."
+          : `Spotify krijgt even te veel aanvragen. Nieuwe poging over ${Math.round(wait / 1000)} s; de visuals lopen gewoon door.`, quota);
+        onLink?.(quota ? "quota" : "wait");
         return wait;
       }
       else if (!r.ok) throw new Error("HTTP " + r.status);
@@ -115,7 +121,7 @@ export function createSpotifySource({ onTrack, onStatus }) {
         const j = await r.json(); signal.throwIfAborted(); const it = j.item;
         if (!it) { onTrack(null); onStatus("Reclame of onbekend item"); }
         else {
-          onStatus("");
+          onStatus(""); onLink?.("ok");
           onTrack({ id: it.id || it.uri, name: it.name,
             artists: it.artists ? it.artists.map((a) => a.name).join(", ") : (it.show ? it.show.name : ""),
             art: it.album?.images?.[0]?.url || it.images?.[0]?.url || "",

@@ -253,10 +253,13 @@ App 0.1.1+ clears the HTTP cache at start and reloads with F5 / Ctrl+R (GitHub P
   0.5 (+ spike ≤ 0.86 = 1.36 < 1.40: never clipped). No energy/kick-driven brightness anywhere.
 
 ## 3.1.1 — Spotify rate limit and Urchin cost
-- Spotify development-mode apps share ONE rate limit for all their users. Polling every 3 s from several devices plus
-  retrying a 429 every 10 s (Retry-After is not readable cross-origin) kept the app blocked: Mo saw "Spotify vraagt even
-  te wachten" and the default "Demo" header. Now `nextPoll()` (js/sources/spotify-poll.js, tests/spotify-poll.test.mjs):
-  every 8 s while playing (the position runs on locally), right after a song should end, 10 s when paused, and on 429 an
-  exponential back-off 15 s → 5 min. Do not poll faster again.
+- Spotify Development Mode (since July 2026): ONE daily request quota per developer account, shared by all users,
+  devices and Client IDs; when it is used up the API answers 429 with reason QUOTA_EXCEEDED until it resets (then
+  nothing connects: Mo saw "Demo" and frozen Snake/Bloop). Polling every 3 s used ~28 800 calls per device per day.
+  3.1.2 `nextPoll()` (js/sources/spotify-poll.js, tested): 20 s while playing + right after the song should end, 30 s
+  paused, 45 s nothing playing, 429 back-off 30 s → 10 min, QUOTA_EXCEEDED 30 min (≈ 4 500 calls/device/day).
+  The source badge shows the link: "spotify ✓" / "spotify …" / "spotify !" (quota). Never poll faster again.
+- Story visuals (Snake, Bloop) also run while real sound comes in (`storyRuns` in app.js), not only when Spotify
+  reports a playing track — otherwise they freeze whenever Spotify is unreachable.
 - Urchin: the bounding sphere follows the longest spike this frame (`uMaxL` from the CPU lengths) and 96 steps: ≈ 40 %
   cheaper (Mo's PC was at 48 fps / scale 0.78–0.89, which is the blur and part of the delay).

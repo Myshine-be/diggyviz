@@ -209,10 +209,12 @@ function useSource(name) {
   const cb = {
     onTrack: (t) => { if (version === sourceVersion) onTrack(t); },
     onStatus: (m, err) => { if (version === sourceVersion) status(m, err); },
+    // Spotify connection shown on the source badge: ✓ connected, … waiting, ! daily quota used up
+    onLink: (state) => { if (version === sourceVersion) $("srcBadge").textContent = { ok: "spotify ✓", wait: "spotify …", quota: "spotify !" }[state] || "spotify"; },
   };
   if (name === "spotify") {
     if (!spotify.isLoggedIn()) { status("Log in bij Spotify via ⚙"); source = createDemoSource({ onTrack, onStatus: () => {} }); }
-    else { source = spotify.createSpotifySource(cb); $("title").textContent = "Spotify"; $("artist").textContent = "Wacht op het nummer dat speelt…"; }
+    else { source = spotify.createSpotifySource(cb); $("title").textContent = "Spotify"; $("artist").textContent = "Wacht op het nummer dat speelt…"; $("srcBadge").textContent = "spotify …"; }
   } else if (name === "lastfm") {
     const user = store.get("lfUser", "");
     if (!user) { status("Vul je Last.fm-gebruikersnaam in via ⚙"); source = createDemoSource({ onTrack, onStatus: () => {} }); }
@@ -281,7 +283,10 @@ function frame(now) {
       const pace = 1 - 0.7 * (audio.rest || 0);
       visTime += Math.min(elapsed, 0.25) * pace;
       const ly = lyricsFrame(visual, pos);
-      engine.render({ lyricLayer: ly.layer, sceneDt: document.visibilityState === "visible" && track.playing && !sheetOpen() ? elapsed * pace : 0, bpm: bpmNow, beatPhase: audio.beat, time: visTime, dt, songTime: pos / 1000, audio, pal: palCur, drop, seed: hashStr(track.id || "x") % 1000, sound: audioData, songs: songsPlayed,
+      // story visuals (Snake, Bloop) run while a song plays OR while real sound comes in — also when Spotify
+      // cannot tell us the track (quota, not logged in), so they never hang while the music clearly plays
+      const storyRuns = track.playing || !!(inp && inp.io.receiving && audio.level > 0.02);
+      engine.render({ lyricLayer: ly.layer, sceneDt: document.visibilityState === "visible" && storyRuns && !sheetOpen() ? elapsed * pace : 0, bpm: bpmNow, beatPhase: audio.beat, time: visTime, dt, songTime: pos / 1000, audio, pal: palCur, drop, seed: hashStr(track.id || "x") % 1000, sound: audioData, songs: songsPlayed,
         lyrics: ly.orbit });
     } catch (e) { console.error(e); }
   }
