@@ -37,9 +37,12 @@ export default {
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, NSPIKES, 1, gl.RED, gl.HALF_FLOAT, st.half);
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
     if (loc.uSpikeL) gl.uniform1i(loc.uSpikeL, 4);
+    let mx = 0; for (let i = 0; i < NSPIKES; i++) mx = Math.max(mx, st.len[i]);
+    if (loc.uMaxL) gl.uniform1f(loc.uMaxL, mx);   // the longest spike now: the shader only marches through that shell
   },
 
   frag: /* glsl */ `
+uniform float uMaxL;
 uniform sampler2D uSpikeL;   // length of every spike, computed per frame in urchin-events.js (spikeLengths)
 const float PHI = 1.61803398875;
 const float NSPIKES = 420.0;
@@ -122,20 +125,20 @@ void main() {
   vec3 col = bg;
 
   // bounding sphere
-  float bR = 1.45;
+  float bR = min(1.45, R + uMaxL + 0.06);                       // tight bounding sphere: short spikes = few steps
   float b = dot(ro, rd), c = dot(ro, ro) - bR * bR, h = b * b - c;
   float glow = 0.0;
   if (h > 0.0) {
     float t = max(0.0, -b - sqrt(h)), tmax = -b + sqrt(h);
     float d = 1.0; int i;
     bool hit = false;
-    for (i = 0; i < 110; i++) {
+    for (i = 0; i < 96; i++) {
       vec3 pos = ro + rd * t;
       d = map(pos);
       glow += exp(-d * 28.0) * (0.15 + 0.85 * gTip) * 0.012;
-      if (d < 0.0008 * t) { hit = true; break; }
+      if (d < 0.0012 * t) { hit = true; break; }
       // the distance only sees the nearest spike: near the ball, cap the step so long neighbours are not skipped
-      t += min(d * 0.72, length(pos) < R + 0.95 ? 0.045 : 1e3);
+      t += min(d * 0.75, length(pos) < R + uMaxL + 0.04 ? 0.05 : 1e3);
       if (t > tmax) break;
     }
     if (hit) {
@@ -146,7 +149,7 @@ void main() {
       vec3 l1 = normalize(o * vec3(0.6, 0.8, 0.6));
       float dif = clamp(dot(n, l1), 0.0, 1.0);
       float rim = pow(1.0 - clamp(dot(n, -rd), 0.0, 1.0), 3.0);
-      float ao = 1.0 - float(i) / 110.0;
+      float ao = 1.0 - float(i) / 96.0;
       vec3 base = mix(uPal[0] * 0.4 + 0.01, uPal[1] * 0.75, smoothstep(0.0, 0.9, tip));
       col = base * (0.1 + 0.85 * dif) * (0.35 + 0.65 * ao);
       col += mix(uPal[1], uPal[2], 0.25) * pow(tip, 3.0) * 0.45;   // steady: no brightness pulses

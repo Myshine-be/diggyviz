@@ -212,7 +212,7 @@ function useSource(name) {
   };
   if (name === "spotify") {
     if (!spotify.isLoggedIn()) { status("Log in bij Spotify via ⚙"); source = createDemoSource({ onTrack, onStatus: () => {} }); }
-    else source = spotify.createSpotifySource(cb);
+    else { source = spotify.createSpotifySource(cb); $("title").textContent = "Spotify"; $("artist").textContent = "Wacht op het nummer dat speelt…"; }
   } else if (name === "lastfm") {
     const user = store.get("lfUser", "");
     if (!user) { status("Vul je Last.fm-gebruikersnaam in via ⚙"); source = createDemoSource({ onTrack, onStatus: () => {} }); }

@@ -251,3 +251,12 @@ App 0.1.1+ clears the HTTP cache at start and reloads with F5 / Ctrl+R (GitHub P
   the raymarch (per pixel per step) made Urchin 3× slower than 2.9 — Mo saw pixels (adaptive scale dropped) and delay.
   Keep per-frame work out of the raymarch; hoist per-pixel constants (Soul Beat `prepInk()`). Ball radius fixed
   0.5 (+ spike ≤ 0.86 = 1.36 < 1.40: never clipped). No energy/kick-driven brightness anywhere.
+
+## 3.1.1 — Spotify rate limit and Urchin cost
+- Spotify development-mode apps share ONE rate limit for all their users. Polling every 3 s from several devices plus
+  retrying a 429 every 10 s (Retry-After is not readable cross-origin) kept the app blocked: Mo saw "Spotify vraagt even
+  te wachten" and the default "Demo" header. Now `nextPoll()` (js/sources/spotify-poll.js, tests/spotify-poll.test.mjs):
+  every 8 s while playing (the position runs on locally), right after a song should end, 10 s when paused, and on 429 an
+  exponential back-off 15 s → 5 min. Do not poll faster again.
+- Urchin: the bounding sphere follows the longest spike this frame (`uMaxL` from the CPU lengths) and 96 steps: ≈ 40 %
+  cheaper (Mo's PC was at 48 fps / scale 0.78–0.89, which is the blur and part of the delay).

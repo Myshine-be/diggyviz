@@ -2,6 +2,7 @@
 import { CONFIG } from "../config.js";
 import { store } from "../store.js";
 import { createPoller } from "./polling.js";
+import { nextPoll } from "./spotify-poll.js";
 
 const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 function randomString(n) { const a = new Uint8Array(n); crypto.getRandomValues(a); return b64url(a).slice(0, n); }
@@ -88,6 +89,7 @@ export async function usePairingCode(code) {
 }
 
 export function createSpotifySource({ onTrack, onStatus }) {
+  let strikes = 0;
   return createPoller({
     onError: (e) => onStatus("Spotify: " + e.message, true),
     async run(signal) {
@@ -96,13 +98,18 @@ export function createSpotifySource({ onTrack, onStatus }) {
       if (!at) { onTrack(null); onStatus("Niet ingelogd bij Spotify", true); return 5000; }
       const r = await fetch("https://api.spotify.com/v1/me/player/currently-playing?additional_types=episode", { headers: { Authorization: "Bearer " + at }, signal });
       signal.throwIfAborted();
-      if (r.status === 204) { onTrack(null); onStatus("Niets aan het spelen op Spotify"); }
+      if (r.status !== 429) strikes = 0;
+      if (r.status === 204) { onTrack(null); onStatus("Niets aan het spelen op Spotify"); return nextPoll({ status: 204 }); }
       else if (r.status === 401) {
         const tok = store.get("tok");
         if (tok?.access === at) { tok.exp = 0; store.set("tok", tok); }
         return 3000;
       } else if (r.status === 403) { onStatus("Spotify weigert: is je account toegevoegd bij User Management?", true); return 15000; }
-      else if (r.status === 429) { onStatus("Spotify vraagt even te wachten."); return Math.max(1, Number(r.headers.get("Retry-After")) || 10) * 1000; }
+      else if (r.status === 429) {
+        const wait = nextPoll({ status: 429, retryAfter: Number(r.headers.get("Retry-After")) || 0, strikes: strikes++ });
+        onStatus(`Spotify krijgt te veel aanvragen van deze app (alle gebruikers samen). Nieuwe poging over ${Math.round(wait / 1000)} s; de visuals lopen gewoon door.`);
+        return wait;
+      }
       else if (!r.ok) throw new Error("HTTP " + r.status);
       else {
         const j = await r.json(); signal.throwIfAborted(); const it = j.item;
@@ -113,6 +120,7 @@ export function createSpotifySource({ onTrack, onStatus }) {
             artists: it.artists ? it.artists.map((a) => a.name).join(", ") : (it.show ? it.show.name : ""),
             art: it.album?.images?.[0]?.url || it.images?.[0]?.url || "",
             dur: it.duration_ms, prog: j.progress_ms || 0, playing: !!j.is_playing, isrc: it.external_ids?.isrc || "" });
+          return nextPoll({ status: 200, playing: !!j.is_playing, prog: j.progress_ms || 0, dur: it.duration_ms || 0 });
         }
       }
     },
