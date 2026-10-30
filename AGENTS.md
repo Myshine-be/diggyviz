@@ -235,8 +235,13 @@ App 0.1.1+ clears the HTTP cache at start and reloads with F5 / Ctrl+R (GitHub P
   touching glsl.js always load the page (or tests/browser.mjs) and check `diggy.engine`.
 - **Snake:** body = bundle of 6 fine lines along the path (quarter circles in corners, continuous arc length
   `s = k − 0.5 + u`), head = lows (broad), tail = highs (fine), bounded ≤ 0.44 cell, converging lines normalised.
-- **Soul Beat:** ink in a glass sphere (no white disc). No centre mechanism: masses on own paths at 0.36–0.62 of the
-  inner radius; never add a pull towards the centroid. Kick stretches ONE mass, snare pulls a tendril + drop.
+- **Soul Beat (3.1):** Mo's own inspiration (30 Oct, video of an "anti-gravity ferrofluid speaker"): a black
+  ferrofluid blot in zero gravity behind a back-lit round window in the cover colour. 56 drops (2 big, 8 mid, many
+  tiny) are simulated on the CPU per frame (js/visuals/soul-ink.js, pure, tests/soul-ink.test.mjs): a moving magnet
+  whose strength follows the lows, kicks burst the ink into a cloud of droplets, snares split droplets off a big drop,
+  highs jitter the tiny ones, and every 8–16 beats the field changes shape (clump, cloud, star, tree, puddle, split).
+  The shader only draws the drops as 2D metaballs (big drops grow ferrofluid spikes with the field) — cheap.
+  This replaces the 3.0 "ink in glass" raymarch (too heavy, not what Mo meant). A central mass is fine here.
 - **Tunnel:** analytic (depth = 0.33 / r), no feedback. Do not reintroduce central shapes: with feedback they become
   the walls. Rings fade out before reaching the camera (no passing glare).
 - **Dunes:** heightfield raymarch; beat ridges from js/visuals/dune-ridges.js (pure, tested) baked into an R16F texture
